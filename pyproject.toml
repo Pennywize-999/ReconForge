@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reconforge"
+version = "0.2.0"
+authors = [
+  { name="Security Researcher", email="admin@example.com" },
+]
+description = "An offline reconnaissance result analyzer and reporting application."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "rich>=13.0.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=4.9.0",
+    "jinja2>=3.1.0"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0"
+]
+
+[project.scripts]
+reconforge = "reconforge.cli:main"

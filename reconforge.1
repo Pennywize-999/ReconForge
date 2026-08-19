@@ -1,0 +1,64 @@
+.TH RECONFORGE 1 "August 2026" "ReconForge v0.2.0" "User Commands"
+.SH NAME
+reconforge \- Offline reconnaissance analyzer and planning tool
+.SH SYNOPSIS
+.B reconforge
+[\fITARGET\fR] [\fIOPTIONS\fR]
+.br
+.B reconforge
+\fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+ReconForge is an offline log analyzer designed for authorized penetration testing environments. It imports raw outputs from Nmap, Gobuster, and other security tools, normalizing and correlating them. Additionally, it offers an interactive planning mode capable of generating structured execution plans based on provided IPs and URLs without executing external network calls directly.
+.SH INTERACTIVE MODE
+Running \fBreconforge\fR without arguments launches the interactive mode, prompting for:
+.IP \[bu] 2
+\fBMode\fR: Standard Recon or WAF-Aware Low-Impact Recon
+.IP \[bu] 2
+\fBTarget Type\fR: IP Address or URL
+.IP \[bu] 2
+\fBPort Configuration\fR: Default or Custom
+.SH IP MODE
+You can quickly generate an execution plan for an IP by passing it directly:
+.br
+.B reconforge 10.48.159.132
+.SH URL MODE
+Pass a URL using the \fB-u\fR or \fB--url\fR flag:
+.br
+.B reconforge -u http://10.48.159.132:5000
+.br
+ReconForge will parse the scheme, IP, host, and port automatically.
+.SH TARGET NORMALIZATION
+ReconForge parses and normalizes targets. For example, \fBhttp://10.0.0.1:5000\fR will correctly populate the IP field (10.0.0.1) and Port field (5000) inside the underlying model, ensuring service-aware tool execution planning.
+.SH MODES
+.TP
+.B Standard Recon
+Plans default enumeration using all applicable installed tools.
+.TP
+.B WAF-Aware Low-Impact Recon
+Configures the execution plan constraints to respect rate-limits, Retry-After headers, and avoid duplicate/evasive requests.
+.SH TOOL REGISTRY
+ReconForge maintains an internal registry of supported tools and their adapters.
+.br
+Check availability with:
+.br
+.B reconforge tools
+.SH OFFLINE ANALYSIS & SESSIONS
+.B reconforge import <dir>
+Imports scan results and stores them in a session.
+.br
+.B reconforge sessions
+Lists historical sessions.
+.SH REPORTS
+.B reconforge show current
+.br
+.B reconforge report current --format html
+.SH EXAMPLES
+.nf
+reconforge
+reconforge 10.48.159.132
+reconforge -u http://10.48.159.132:5000
+reconforge -u https://example.com
+reconforge 10.48.159.132 --mode low-impact
+.fi
+.SH EXIT STATUS
+0 on success, 1 on error.

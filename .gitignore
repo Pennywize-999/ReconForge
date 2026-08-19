@@ -1,0 +1,36 @@
+# Virtual Environments
+.venv/
+venv/
+env/
+.venv-test/
+
+# Python Caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Builds
+*.egg-info/
+dist/
+build/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ReconForge output
+.reconforge/
+sessions/
+reports/
+*.session.json
+report.html
+report.json
+
+# Temporaries
+*.tmp
+*.log
+!tests/fixtures/*.log
