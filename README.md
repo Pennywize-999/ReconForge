@@ -42,8 +42,9 @@ reconforge
 
 **Target Planning:**
 ```bash
-reconforge 10.48.159.132
-reconforge -u http://10.48.159.132:5000
+reconforge <IP>
+reconforge -u http://<IP>:<PORT>
+reconforge -u https://<IP>:<PORT>
 ```
 
 **Offline Analysis:**
