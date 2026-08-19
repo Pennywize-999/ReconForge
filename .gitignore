@@ -34,3 +34,5 @@ report.json
 *.tmp
 *.log
 !tests/fixtures/*.log
+
+.pytest-tmp/

@@ -42,9 +42,16 @@ reconforge
 
 **Target Planning:**
 ```bash
-reconforge <IP>
-reconforge -u http://<IP>:<PORT>
-reconforge -u https://<IP>:<PORT>
+reconforge <IP> --plan
+reconforge -u http://<IP>:<PORT> --plan
+reconforge -u https://<IP>:<PORT> --plan
+```
+
+**Real Execution:**
+```bash
+reconforge <IP> --execute
+reconforge -u https://<IP>:<PORT> --execute
+reconforge -u https://<IP>:<PORT> --execute --mode low-impact
 ```
 
 **Offline Analysis:**

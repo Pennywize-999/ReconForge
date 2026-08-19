@@ -155,11 +155,11 @@ class TerminalReporter:
         self.console.print(table)
 
     def _print_evidence_section(self, target: Target):
-        if not target.evidence:
-            return
-
         self.console.print("\n[bold cyan]SESSION EVIDENCE[/bold cyan]")
         self.console.print("-" * 60)
-        for ev in target.evidence:
-            self.console.print(f"  {ev.source_file} ({ev.source_type})")
+        if not target.evidence:
+            self.console.print("  [!] No reconnaissance evidence was collected in this session.")
+        else:
+            for ev in target.evidence:
+                self.console.print(f"  {ev.source_file} ({ev.source_type})")
         self.console.print("\n")

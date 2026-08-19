@@ -83,6 +83,30 @@ class ToolRegistry:
             executable="feroxbuster"
         ))
 
+        self.register(ToolDefinition(
+            name="http_collector",
+            category="Web",
+            description="Safe HTTP Information Collector",
+            supported_target_types=["url"],
+            supported_protocols=["http", "https"],
+            input_requirements="URL",
+            output_format="text",
+            parser_name="HTTPParser",
+            executable="http_collector"
+        ))
+
+        self.register(ToolDefinition(
+            name="tls_collector",
+            category="Network",
+            description="Safe TLS Information Collector",
+            supported_target_types=["url"],
+            supported_protocols=["https"],
+            input_requirements="URL",
+            output_format="text",
+            parser_name="TLSParser",
+            executable="tls_collector"
+        ))
+
     def register(self, tool: ToolDefinition):
         self.tools[tool.name] = tool
 
@@ -90,6 +114,8 @@ class ToolRegistry:
         return self.tools.get(name)
 
     def is_installed(self, tool_name: str) -> bool:
+        if tool_name in ["http_collector", "tls_collector"]:
+            return True
         tool = self.get_tool(tool_name)
         if not tool:
             return False

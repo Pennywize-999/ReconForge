@@ -1,33 +1,32 @@
 import os
-from typing import Any
+from typing import Any, Optional
 
 from reconforge.core.models import ReconTarget
 from reconforge.tools.models import ToolExecutionPlan
 from reconforge.tools.adapters.base import ToolAdapter
+from reconforge.core.config import load_config
 
-class GobusterAdapter(ToolAdapter):
+class DirbAdapter(ToolAdapter):
     @property
     def tool_name(self) -> str:
-        return "gobuster"
+        return "dirb"
 
     @property
     def parser_name(self) -> str:
-        return "GobusterParser"
+        return "DirbParser"
 
     def supports_target(self, target: ReconTarget) -> bool:
         return target.scheme in ["http", "https"]
 
-    def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> Any:
-        from reconforge.core.config import load_config
+    def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> Optional[ToolExecutionPlan]:
         config = load_config()
         wordlist = next((w for w in config.default_wordlists if os.path.exists(w)), None)
 
         if not wordlist:
-            return None
+            return None # Will be skipped
 
         output_file = os.path.join(output_dir, f"{self.tool_name}.txt")
-
-        args = ["dir", "-u", target.url, "-w", wordlist, "-o", output_file, "-t", str(config.gobuster_threads)]
+        args = [target.url, wordlist, "-o", output_file, "-S"]
 
         return ToolExecutionPlan(
             tool=self.tool_name,

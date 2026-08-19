@@ -30,8 +30,12 @@ class Analyzer:
     def analyze_directory(self, directory_path: str) -> Target:
         target = Target()
 
+        metadata_files = {"plan.json", "target.json", "execution.json", "report.json", "report.html"}
+
         for root, _, files in os.walk(directory_path):
             for file in files:
+                if file in metadata_files:
+                    continue
                 file_path = os.path.join(root, file)
                 self.analyze_file(file_path, target)
 
@@ -50,19 +54,29 @@ class Analyzer:
 
         parsed = False
         for parser in self.parsers:
-            if parser.can_parse(file_path):
-                hosts, findings, errors = parser.parse(file_path)
+            try:
+                if parser.can_parse(file_path):
+                    hosts, findings, errors = parser.parse(file_path)
 
-                # Merge hosts
-                for host in hosts:
-                    self._merge_host(target, host)
+                    # Merge hosts
+                    for host in hosts:
+                        self._merge_host(target, host)
 
+                    target.evidence.append(Evidence(
+                        source_file=file_path,
+                        source_type=parser.__name__,
+                        content=f"Parsed {len(hosts)} hosts and {len(findings)} findings."
+                    ))
+                    parsed = True
+                    break
+            except Exception as e:
+                print(f"[!] Error parsing {file_path} with {parser.__name__}: {str(e)}")
                 target.evidence.append(Evidence(
                     source_file=file_path,
                     source_type=parser.__name__,
-                    content=f"Parsed {len(hosts)} hosts and {len(findings)} findings."
+                    content=f"Error parsing file: {str(e)}"
                 ))
-                parsed = True
+                parsed = True # Prevent unknown file format warning
                 break
 
         if not parsed:

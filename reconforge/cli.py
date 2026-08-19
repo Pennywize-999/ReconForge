@@ -17,9 +17,9 @@ from reconforge.tools.registry import ToolRegistry
 def interactive_menu():
     try:
         try:
-            print("╭──────────────────────────────╮")
-            print(f"│       RECONFORGE v{__version__:<14}│")
-            print("╰──────────────────────────────╯\n")
+            print("â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®")
+            print(f"â”‚       RECONFORGE v{__version__:<14}â”‚")
+            print("â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯\n")
         except UnicodeEncodeError:
             print("-" * 32)
             print(f"       RECONFORGE v{__version__}")
@@ -126,6 +126,8 @@ def main():
     # Global arguments
     parser.add_argument("-u", "--url", help="URL target")
     parser.add_argument("--mode", choices=["standard", "low-impact"], help="Reconnaissance mode")
+    parser.add_argument("--plan", action="store_true", help="Only plan the execution")
+    parser.add_argument("--execute", action="store_true", help="Execute the planned tools")
 
     # We will only add subparsers if the command is actually one of the subparser commands
     # Otherwise argparse will throw an invalid choice error on IPs like 10.0.0.1
@@ -288,8 +290,46 @@ def main():
         planner = ReconPlanner()
         plan = planner.plan(recon_target)
 
-        backend = PlanningOnlyBackend()
-        backend.execute(plan)
+        session = session_manager.create_session(recon_target)
+        plan.output_directory = session_manager.get_session_dir(session.id)
+
+        # Save plan to session
+        plan_file = os.path.join(plan.output_directory, "plan.json")
+        with open(plan_file, "w") as f:
+            import json
+            import dataclasses
+            json.dump(dataclasses.asdict(plan), f, indent=2)
+
+        if getattr(args, "execute", False):
+            from reconforge.execution.backend import RealExecutionBackend
+            backend = RealExecutionBackend()
+        else:
+            backend = PlanningOnlyBackend()
+
+        result = backend.execute(plan)
+
+        if getattr(args, "execute", False) and result:
+            from reconforge.reporters.terminal import TerminalReporter
+            from reconforge.reporters.json_ext import JSONReporter
+            from reconforge.reporters.html import HTMLReporter
+
+            reporter = TerminalReporter()
+            reporter.report(result)
+
+            json_rep = JSONReporter()
+            json_path = os.path.join(plan.output_directory, "report.json")
+            json_rep.report(result, json_path)
+
+            html_rep = HTMLReporter()
+            html_path = os.path.join(plan.output_directory, "report.html")
+            html_rep.report(result, html_path)
+
+            print("\nEVIDENCE & REPORTS")
+            print(f"  {json_path}")
+            print(f"  {html_path}")
+            for ev in result.evidence:
+                print(f"  {ev.source_file}")
+
         sys.exit(0)
 
     if not has_command and not unknown and not args.url:

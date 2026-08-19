@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from typing import List
 
@@ -83,3 +84,77 @@ class PlanningOnlyBackend(ExecutionBackend):
             self.console.print(t_table)
 
         self.console.print("\n[bold yellow]Note: Execution backend is set to PlanningOnlyBackend. No tools were actually executed.[/bold yellow]")
+
+
+class RealExecutionBackend(ExecutionBackend):
+    def __init__(self):
+        from reconforge.tools.adapters.dirb import DirbAdapter
+        from reconforge.tools.adapters.http_collector import HttpCollectorAdapter
+        from reconforge.tools.adapters.tls_collector import TlsCollectorAdapter
+
+        self.console = Console()
+        self.registry = ToolRegistry()
+        self.adapters = [NmapAdapter(), GobusterAdapter(), WhatWebAdapter(), DirbAdapter(), HttpCollectorAdapter(), TlsCollectorAdapter()]
+
+        from reconforge.execution.executor import ToolExecutor
+        from reconforge.core.analyzer import Analyzer
+        self.executor = ToolExecutor()
+        self.analyzer = Analyzer()
+
+    def execute(self, plan: ReconPlan):
+        self.console.print("\n[bold green]Starting Execution Backend...[/bold green]")
+
+        tool_plans: List[ToolExecutionPlan] = []
+        for adapter in self.adapters:
+            if adapter.supports_target(plan.target):
+                tool_plan = adapter.build_plan(plan.target, plan.output_directory)
+                if tool_plan:
+                    tool_plans.append(tool_plan)
+
+        from datetime import datetime
+        from reconforge.execution.executor import ToolExecutionResult
+
+        self.console.print("\n[bold cyan]TOOL EXECUTION[/bold cyan]")
+        results = []
+        for tp in tool_plans:
+            if not self.registry.is_installed(tp.tool) and tp.tool not in ["http_collector", "tls_collector"]:
+                self.console.print(f"[SKIP] {tp.tool}\nReason: Executable not found")
+
+                skipped_result = ToolExecutionResult(
+                    tool=tp.tool,
+                    target=tp.target,
+                    arguments=tp.arguments,
+                    output_file="",
+                    return_code=-1,
+                    stdout="",
+                    stderr="Executable not found",
+                    started_at=datetime.now().isoformat(),
+                    finished_at=datetime.now().isoformat(),
+                    duration=0.0,
+                    success=False,
+                    timed_out=False,
+                    error="Executable not found"
+                )
+                results.append(skipped_result)
+                continue
+
+            self.console.print(f"[*] Running {tp.tool}...")
+            result = self.executor.execute(tp)
+            results.append(result)
+
+            if result.success:
+                self.console.print(f"[âœ“] {tp.tool}")
+            elif result.timed_out:
+                self.console.print(f"[TIMEOUT] {tp.tool}")
+            else:
+                self.console.print(f"[âœ—] {tp.tool} (Error: {result.error})")
+
+        exec_file = os.path.join(plan.output_directory, "execution.json")
+        with open(exec_file, "w") as f:
+            import json
+            out = [r.__dict__ for r in results]
+            json.dump(out, f, indent=2)
+
+        self.console.print("\n[bold cyan]Parsing and Correlation...[/bold cyan]")
+        analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
+        return analyzed_target
