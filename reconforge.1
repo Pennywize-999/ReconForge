@@ -9,27 +9,36 @@ reconforge \- Offline reconnaissance analyzer and planning tool
 \fICOMMAND\fR [\fIARGS\fR]
 .SH DESCRIPTION
 ReconForge is an offline log analyzer designed for authorized penetration testing environments. It imports raw outputs from Nmap, Gobuster, and other security tools, normalizing and correlating them. Additionally, it offers an interactive planning mode capable of generating structured execution plans based on provided IPs and URLs without executing external network calls directly.
+
 .SH INTERACTIVE MODE
 Running \fBreconforge\fR without arguments launches the interactive mode, prompting for Mode, Target Type, and Port Configuration.
+
 .SH TARGET MODES
-.B reconforge 10.48.159.132
+.B reconforge <IP>
 .br
-.B reconforge -u http://10.48.159.132:5000
+.B reconforge -u http://<IP>:<PORT>
+.br
+.B reconforge -u https://<IP>:<PORT>
 .br
 .B reconforge --url https://example.com
+
 .SH GLOBAL OPTIONS
 .TP
 .B --mode standard
 Plans default enumeration using all applicable installed tools.
+
 .TP
 .B --mode low-impact
 WAF-Aware Low-Impact Recon. Configures the execution plan constraints to respect rate-limits, Retry-After headers, and avoid duplicate/evasive requests.
+
 .TP
 .B --version
 Displays the installed ReconForge version (v0.2.0).
+
 .TP
 .B --test
 Runs the built-in testing workflow.
+
 .SH OFFLINE ANALYSIS
 .B reconforge import <dir>
 .br
@@ -38,6 +47,7 @@ Imports an entire directory of scan results and stores them in a session.
 .B reconforge analyze <file>
 .br
 Analyzes a single file and outputs the parsed intelligence.
+
 .SH SESSIONS AND REPORTS
 .B reconforge sessions
 .br
@@ -45,27 +55,38 @@ Lists historical sessions.
 .br
 .B reconforge show current
 .br
-Displays summary of the latest session.
+Displays the summary of the latest session.
 .br
 .B reconforge report current --format html
 .br
-Generates a report for the latest session (supported formats: terminal, json, html).
+Generates a report for the latest session. Supported formats are terminal, json, and html.
 .br
 .B reconforge waf current
 .br
 Outputs the WAF and CDN analysis for the latest session.
+
 .SH TOOL REGISTRY
 .B reconforge tools
 .br
-Checks the availability of registered tools (e.g., Nmap, Gobuster) via the internal Tool Registry adapters.
+Checks the availability of registered tools, such as Nmap and Gobuster, via the internal Tool Registry adapters.
+
 .SH EXAMPLES
 .nf
 reconforge
-reconforge 10.48.159.132 --mode low-impact
+reconforge <IP>
+reconforge <IP> --mode low-impact
+reconforge -u http://<IP>:<PORT>
+reconforge -u https://<IP>:<PORT>
 reconforge analyze tests/fixtures/sample.xml
 reconforge import tests/fixtures/
+reconforge sessions
+reconforge show current
 reconforge report current --format terminal
+reconforge report current --format json
+reconforge report current --format html
 reconforge waf current
+reconforge tools
 .fi
+
 .SH EXIT STATUS
 0 on success, 1 on error.
