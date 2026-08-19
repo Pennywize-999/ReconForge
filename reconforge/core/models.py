@@ -235,6 +235,7 @@ class Host:
 class Target:
     hosts: Dict[str, Host] = field(default_factory=dict)
     evidence: List[Evidence] = field(default_factory=list)
+    execution: List[Dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Target":
@@ -243,6 +244,8 @@ class Target:
             d["hosts"] = {k: Host.from_dict(v) for k, v in d["hosts"].items()}
         if "evidence" in d:
             d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"]]
+        if "execution" in d:
+            d["execution"] = list(d["execution"])
         return cls(**d)
 
 @dataclass

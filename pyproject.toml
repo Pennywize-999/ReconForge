@@ -27,5 +27,8 @@ dev = [
     "pytest>=7.0.0"
 ]
 
+[tool.setuptools.package-data]
+reconforge = ["templates/*.html"]
+
 [project.scripts]
 reconforge = "reconforge.cli:main"

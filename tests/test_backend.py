@@ -16,11 +16,11 @@ def test_planning_backend():
 
 @patch("reconforge.execution.executor.ToolExecutor.execute")
 @patch("reconforge.core.analyzer.Analyzer.analyze_directory")
-def test_real_execution_backend(mock_analyze, mock_execute):
+def test_real_execution_backend(mock_analyze, mock_execute, tmp_path):
     target = parse_target("127.0.0.1")
     planner = ReconPlanner()
     plan = planner.plan(target)
-    plan.output_directory = "/tmp/fake"
+    plan.output_directory = str(tmp_path)
 
     # Mock executor result
     from reconforge.execution.executor import ToolExecutionResult
@@ -40,15 +40,15 @@ def test_real_execution_backend(mock_analyze, mock_execute):
         error=""
     )
 
-    mock_analyze.return_value = target
+    from reconforge.core.models import Target
+    analyzed_target = Target()
+    mock_analyze.return_value = analyzed_target
 
     backend = RealExecutionBackend()
 
-    with patch("os.path.join", return_value="/tmp/fake/execution.json"), \
-         patch("builtins.open"), \
-         patch("reconforge.tools.registry.ToolRegistry.is_installed", return_value=True):
+    with patch("reconforge.tools.registry.ToolRegistry.is_installed", return_value=True):
         result = backend.execute(plan)
 
-    assert result == target
+    assert result == analyzed_target
     assert mock_execute.called
     assert mock_analyze.called

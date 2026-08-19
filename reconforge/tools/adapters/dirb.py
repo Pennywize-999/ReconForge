@@ -20,7 +20,9 @@ class DirbAdapter(ToolAdapter):
 
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> Optional[ToolExecutionPlan]:
         config = load_config()
-        wordlist = next((w for w in config.default_wordlists if os.path.exists(w)), None)
+        # Add common Kali wordlist to defaults
+        wordlists = config.default_wordlists + ["/usr/share/wordlists/dirb/common.txt"]
+        wordlist = next((w for w in wordlists if os.path.exists(w)), None)
 
         if not wordlist:
             return None # Will be skipped

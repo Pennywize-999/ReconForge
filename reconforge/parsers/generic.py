@@ -21,23 +21,7 @@ class GenericTextParser(BaseParser):
         if not content:
             return hosts, findings, ["Failed to read generic file"]
 
-        filename = os.path.basename(file_path)
-
-        # We just create a generic finding
-        finding = Finding(
-            title=f"Unstructured Output: {filename}",
-            finding_type=FindingType.INFORMATION,
-            severity="INFO",
-            confidence=Confidence.LOW,
-            description="This file was parsed generically because no specific parser matched it.",
-            source_file=filename,
-            source_type="Generic",
-            evidence=[Evidence(source_file=filename, source_type="Generic", content=content[:500] + "...")]
-        )
-
-        # We attach it to a finding list (not bound to a host initially, but we can bind to an 'unknown' host)
-        host = Host(ip="unknown", status="up")
-        host.findings.append(finding)
-        hosts.append(host)
-
+        # The Analyzer will automatically attach the file content as Evidence
+        # to the overall target since we return empty hosts/findings here.
+        # This prevents duplicate "unknown" hosts while preserving the evidence.
         return hosts, findings, errors

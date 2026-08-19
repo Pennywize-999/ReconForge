@@ -39,6 +39,16 @@ class Analyzer:
                 file_path = os.path.join(root, file)
                 self.analyze_file(file_path, target)
 
+        # Load execution data if present
+        exec_file = os.path.join(directory_path, "execution.json")
+        if os.path.exists(exec_file):
+            try:
+                import json
+                with open(exec_file, "r") as f:
+                    target.execution = json.load(f)
+            except Exception as e:
+                print(f"[!] Error loading execution.json: {e}")
+
         # Post-processing: WAF Analysis
         waf_analyzer = WAFAnalyzer()
         for host in target.hosts.values():
