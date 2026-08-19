@@ -17,6 +17,7 @@ def test_planner_url_target():
     plan = planner.plan(target)
 
     assert "Web Analysis" in plan.modules
+    assert "Technology Identification (WhatWeb)" in plan.modules
     assert "TLS Analysis" in plan.modules
 
 def test_planner_waf_aware_mode():

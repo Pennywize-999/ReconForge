@@ -18,6 +18,7 @@ class ReconPlanner:
             modules.append("Service Discovery")
         elif target.target_type == "url":
             modules.append("Web Analysis")
+            modules.append("Technology Identification (WhatWeb)")
             if target.scheme == "https":
                 modules.append("TLS Analysis")
 

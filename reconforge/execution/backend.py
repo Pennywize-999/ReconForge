@@ -6,6 +6,7 @@ from reconforge.tools.models import ToolExecutionPlan
 from reconforge.tools.registry import ToolRegistry
 from reconforge.tools.adapters.nmap import NmapAdapter
 from reconforge.tools.adapters.gobuster import GobusterAdapter
+from reconforge.tools.adapters.whatweb import WhatWebAdapter
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -19,7 +20,7 @@ class PlanningOnlyBackend(ExecutionBackend):
     def __init__(self):
         self.console = Console()
         self.registry = ToolRegistry()
-        self.adapters = [NmapAdapter(), GobusterAdapter()]
+        self.adapters = [NmapAdapter(), GobusterAdapter(), WhatWebAdapter()]
 
     def execute(self, plan: ReconPlan):
         """
