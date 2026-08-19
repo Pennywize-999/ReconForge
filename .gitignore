@@ -27,8 +27,6 @@ Thumbs.db
 sessions/
 reports/
 *.session.json
-report.html
-report.json
 
 # Temporaries
 *.tmp

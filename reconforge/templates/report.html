@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReconForge Analysis Report</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1, h2, h3 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .host-card { border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .status-up { color: green; font-weight: bold; }
+        .status-down { color: red; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .severity-CRITICAL { color: #fff; background-color: #dc3545; padding: 2px 5px; border-radius: 3px; font-weight: bold;}
+        .severity-HIGH { color: #fff; background-color: #e67e22; padding: 2px 5px; border-radius: 3px; font-weight: bold;}
+        .severity-MEDIUM { color: #fff; background-color: #f1c40f; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
+        .severity-LOW { color: #fff; background-color: #3498db; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
+        .severity-INFO { color: #fff; background-color: #95a5a6; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
+        .confidence { font-size: 0.9em; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+    <h1>ReconForge Executive Summary</h1>
+    
+    <h2>Target Overview</h2>
+    {% for ip, host in target.hosts.items() %}
+    <div class="host-card">
+        <h3>Host: {{ ip }} <span class="status-{{ host.status.lower() }}">({{ host.status }})</span></h3>
+        
+        {% if host.hostnames %}
+        <p><strong>Hostnames:</strong> {{ host.hostnames | join(', ') }}</p>
+        {% endif %}
+        {% if host.ipv6 %}
+        <p><strong>IPv6:</strong> {{ host.ipv6 }}</p>
+        {% endif %}
+        {% if host.mac %}
+        <p><strong>MAC:</strong> {{ host.mac }}</p>
+        {% endif %}
+        {% if host.os_guesses or host.os_cpes %}
+        <p><strong>OS:</strong> {{ (host.os_guesses + host.os_cpes) | join(', ') }}</p>
+        {% endif %}
+        
+        {% if host.ports %}
+        <h4>Open Ports & Services</h4>
+        <table>
+            <tr>
+                <th>Port</th>
+                <th>Service</th>
+                <th>Product</th>
+                <th>Version</th>
+            </tr>
+            {% for port in host.ports %}
+            <tr>
+                <td>{{ port.number }}/{{ port.protocol }}</td>
+                <td>{{ port.service.name if port.service else 'unknown' }}</td>
+                <td>{{ port.service.product if port.service else '' }}</td>
+                <td>{{ port.service.version if port.service else '' }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+        
+        {% if host.web_endpoints %}
+        <h4>Web Endpoints</h4>
+        <table>
+            <tr>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Category</th>
+            </tr>
+            {% for ep in host.web_endpoints %}
+            <tr>
+                <td><a href="{{ ep.url }}" target="_blank">{{ ep.url }}</a></td>
+                <td>{{ ep.status_code or '???' }}</td>
+                <td>{{ ep.category }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
+        {% if host.waf_analysis %}
+        <h4>WAF / CDN Analysis</h4>
+        <div style="background-color: #f9f9f9; padding: 10px; border-radius: 5px;">
+            <p><strong>Detection:</strong> {{ 'Possible WAF/CDN' if host.waf_analysis.detected else 'None Detected' }}</p>
+            {% if host.waf_analysis.provider %}
+            <p><strong>Provider:</strong> {{ host.waf_analysis.provider }} (Confidence: {{ host.waf_analysis.provider_confidence.value }})</p>
+            {% endif %}
+            <p><strong>Confidence:</strong> {{ host.waf_analysis.confidence.value }}</p>
+            
+            {% if host.waf_analysis.indicators %}
+            <p><strong>Indicators:</strong></p>
+            <ul>
+                {% for ind in host.waf_analysis.indicators %}
+                <li>{{ ind }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            
+            <p><strong>Rate Limiting:</strong> {{ 'Observed' if host.waf_analysis.rate_limiting else 'None Detected' }}</p>
+            
+            {% if host.waf_analysis.status_counts %}
+            <p><strong>HTTP Status Patterns:</strong></p>
+            <ul>
+                {% for status, count in host.waf_analysis.status_counts.items() %}
+                <li>HTTP {{ status }}: {{ count }} responses</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <p><strong>Interpretation:</strong> Some reconnaissance requests appear to have been filtered or rate-limited based on evidence.</p>
+            <p><strong>Recommendation:</strong> Use authorized low-impact testing procedures and avoid repeated requests that trigger blocking controls.</p>
+        </div>
+        {% endif %}
+        
+        {% if host.findings %}
+        <h4>Findings</h4>
+        <table>
+            <tr>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Title</th>
+            </tr>
+            {% for finding in host.findings %}
+            {% if finding.finding_type.value != "VULNERABILITY" %}
+            <tr>
+                <td>{{ finding.finding_type.value }}</td>
+                <td><span class="severity-{{ finding.severity }}">{{ finding.severity }}</span></td>
+                <td>{{ finding.title }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </table>
+        {% endif %}
+
+        {% if host.vulnerabilities %}
+        <h4>Vulnerability Intelligence</h4>
+        <table>
+            <tr>
+                <th>CVE ID</th>
+                <th>Severity</th>
+                <th>CVSS</th>
+                <th>Product</th>
+                <th>Confidence</th>
+            </tr>
+            {% for vuln in host.vulnerabilities %}
+            <tr>
+                <td><strong>{{ vuln.cve_id or 'VULN' }}</strong></td>
+                <td><span class="severity-{{ vuln.severity }}">{{ vuln.severity }}</span></td>
+                <td>{{ vuln.cvss or 'N/A' }}</td>
+                <td>{{ vuln.affected_product }} {{ vuln.detected_version or '' }}</td>
+                <td class="confidence">{{ vuln.confidence.value }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <h2>Session Metadata</h2>
+    <ul>
+    {% for ev in target.evidence %}
+        <li><strong>{{ ev.source_type }}:</strong> {{ ev.source_file }}</li>
+    {% endfor %}
+    </ul>
+    
+</body>
+</html>
