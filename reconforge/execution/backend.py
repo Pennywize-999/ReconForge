@@ -1,6 +1,5 @@
 import os
 from abc import ABC, abstractmethod
-from typing import List
 
 from reconforge.core.models import ReconPlan, ReconTarget
 from reconforge.tools.models import ToolExecutionPlan
@@ -56,9 +55,6 @@ class RealExecutionBackend(ExecutionBackend):
         self.tls_adapter = TlsCollectorAdapter()
 
     def execute(self, plan: ReconPlan):
-        # Interactive execution historically reached this backend without a
-        # session directory. Always establish a writable output root before
-        # any adapter constructs tool output paths.
         if not plan.output_directory:
             plan.output_directory = os.path.join("sessions", "current")
         os.makedirs(plan.output_directory, exist_ok=True)
@@ -69,13 +65,18 @@ class RealExecutionBackend(ExecutionBackend):
         if plan.target.target_type == "ip":
             self._phase("PHASE 1 / 5", "DISCOVERY")
             nmap_adapter = NmapAdapter()
-            tp = nmap_adapter.build_plan(plan.target, plan.output_directory)
+            tp = nmap_adapter.build_plan(plan.target, plan.output_directory, mode=plan.mode)
             result = self._run_plan(tp, plan.target.input, results)
             if result is None:
                 return None
 
             analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
-            web_targets = self._discover_web_targets(analyzed_target)
+            web_targets = self._discover_web_targets(
+                analyzed_target,
+                plan.target.discovery_profile,
+                plan.target.mode,
+            )
+            self._show_service_routing(analyzed_target, web_targets, plan)
             self._phase("PHASE 2 / 5", "SERVICE-AWARE ENUMERATION")
         else:
             web_targets = [plan.target]
@@ -99,7 +100,6 @@ class RealExecutionBackend(ExecutionBackend):
         return final_target
 
     def _run_web_intelligence(self, target, plan, results):
-        # First establish HTTP and technology context, then select discovery categories.
         for adapter in self.http_adapters:
             if not adapter.supports_target(target):
                 continue
@@ -116,14 +116,14 @@ class RealExecutionBackend(ExecutionBackend):
         if not technologies:
             self.console.print("    [INFO] No technology fingerprint matched")
 
-        self.console.print(f"  DISCOVERY PROFILE: {plan.target.discovery_profile}")
+        self.console.print(f"  DISCOVERY PROFILE: {target.discovery_profile}")
         for adapter in self.discovery_adapters:
             if not adapter.supports_target(target):
                 continue
             tp = adapter.build_plan(
                 target,
                 plan.output_directory,
-                discovery_profile=plan.target.discovery_profile,
+                discovery_profile=target.discovery_profile,
                 technologies=technologies,
                 services=services,
             )
@@ -152,6 +152,28 @@ class RealExecutionBackend(ExecutionBackend):
             self.console.print(f"  [WARN] {tp.tool}: failed, continuing")
         return result
 
+    def _show_service_routing(self, analyzed_target, web_targets, plan):
+        """Show the port-driven routing decision without hiding unsupported services."""
+        self.console.print("\nSERVICE-AWARE ROUTING")
+        web_by_port = {(t.ip, t.port): t for t in web_targets}
+        for host in analyzed_target.hosts.values():
+            for port in sorted(host.ports, key=lambda p: (p.number, p.protocol)):
+                if port.state != "open":
+                    continue
+                service = port.service.name if port.service else "unknown"
+                product = port.service.product if port.service else ""
+                key = (host.ip, port.number)
+                if key in web_by_port:
+                    target = web_by_port[key]
+                    route = "ForgeProbe -> ForgeTech -> ForgeDiscover"
+                    if target.scheme == "https":
+                        route += " -> ForgeTLS"
+                    self.console.print(f"  {port.number}/{port.protocol} {service:<10} -> {route}")
+                else:
+                    label = service or "unknown"
+                    detail = f" ({product})" if product else ""
+                    self.console.print(f"  {port.number}/{port.protocol} {label}{detail} -> inventory only")
+
     @staticmethod
     def _technology_context(target, web_target):
         technologies = []
@@ -172,7 +194,8 @@ class RealExecutionBackend(ExecutionBackend):
         return sorted(set(technologies)), sorted(set(services))
 
     @staticmethod
-    def _discover_web_targets(analyzed_target):
+    def _discover_web_targets(analyzed_target, discovery_profile="COMMON", mode="Standard Recon"):
+        """Convert every Nmap-detected HTTP/HTTPS service into a concrete URL target."""
         targets = []
         for host in analyzed_target.hosts.values():
             for port in host.ports:
@@ -180,13 +203,38 @@ class RealExecutionBackend(ExecutionBackend):
                     continue
                 service_name = (port.service.name if port.service else "").lower()
                 product = (port.service.product if port.service else "").lower()
-                is_web = port.number in {80, 443, 8000, 8080, 8081, 8443} or "http" in service_name or "http" in product or "www" in service_name
+                is_web = (
+                    "http" in service_name
+                    or "http" in product
+                    or "www" in service_name
+                    or port.number in {80, 443, 8000, 8008, 8080, 8081, 8088, 8888, 8443, 9443}
+                )
                 if not is_web:
                     continue
-                https = port.number in {443, 8443} or "https" in service_name or "ssl" in service_name or "https" in product or "ssl" in product
+
+                https = (
+                    port.number in {443, 8443, 9443}
+                    or "https" in service_name
+                    or "ssl" in service_name
+                    or "https" in product
+                    or "ssl" in product
+                )
                 scheme = "https" if https else "http"
                 url = f"{scheme}://{host.ip}:{port.number}"
-                targets.append(ReconTarget(input=url, target_type="url", ip=host.ip, scheme=scheme, port=port.number, url=url, discovery_profile="COMMON"))
+                targets.append(
+                    ReconTarget(
+                        input=url,
+                        target_type="url",
+                        ip=host.ip,
+                        scheme=scheme,
+                        port=port.number,
+                        url=url,
+                        mode=mode,
+                        source="nmap_service_routing",
+                        discovery_profile=discovery_profile,
+                    )
+                )
+
         unique = {}
         for target in targets:
             unique[target.url] = target
