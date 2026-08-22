@@ -21,9 +21,9 @@ class WhatWebAdapter(ToolAdapter):
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> ToolExecutionPlan:
         output_file = os.path.join(output_dir, f"{self.tool_name}.txt")
 
-        # Aggressive fingerprinting is useful, but it must never hold the
-        # complete reconnaissance run indefinitely. The executor also applies
-        # a hard process timeout as a second safety boundary.
+        # DEEP reconnaissance keeps aggressive fingerprinting, but bounds
+        # network concurrency and socket timeouts so one slow endpoint cannot
+        # hold the entire run indefinitely.
         args = [
             "-a", "3",
             "-t", "5",
