@@ -28,6 +28,11 @@ class TerminalReporter:
             if host.waf_analysis:
                 self._print_waf(host)
 
+    # Compatibility hook retained for older callers/tests. ReconForge no longer
+    # renders raw execution/session evidence in the user-facing report.
+    def _print_evidence_section(self, target: Target):
+        return None
+
     def _print_target(self, host: Host):
         self.console.print(f"\n[bold cyan]HOST INFORMATION[/bold cyan]\n{'-' * 60}")
         self.console.print(f"Status:   {host.status}")
@@ -79,7 +84,6 @@ class TerminalReporter:
         else:
             self.console.print("No confirmed application technologies detected.")
 
-        # Keep URL discovery compact. One row per unique URL, no extra block per endpoint.
         self.console.print("\n[bold cyan]DISCOVERED / INTERESTING URLS[/bold cyan]")
         table = Table(box=None, pad_edge=False, show_edge=False, expand=False)
         table.add_column("URL", overflow="fold")
