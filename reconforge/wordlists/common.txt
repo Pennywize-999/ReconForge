@@ -1,0 +1,3 @@
+# ReconForge COMMON profile
+# High-confidence baseline candidates. Categories are expanded at runtime.
+# Source: ReconForge curated corpus
