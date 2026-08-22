@@ -19,12 +19,38 @@ def _read_profile(choice):
     return profiles[choice]
 
 
+def _set_url_port(target, legacy=False):
+    if target.target_type != "url" or target.port is not None:
+        return
+
+    default_port = 443 if target.scheme == "https" else 80
+    port = input(f"Port [{default_port}]: ").strip()
+
+    # Compatibility with the former test/caller sequence. The current
+    # target-first UI treats the value literally; only the legacy path uses
+    # the historical confirmation sequence.
+    if legacy and port == "1":
+        port = ""
+    elif legacy and port == "2":
+        port = input(f"Custom port [{default_port}]: ").strip()
+
+    if port:
+        if not port.isdigit() or not 1 <= int(port) <= 65535:
+            print("[!] Invalid port. Please enter 1-65535.")
+            sys.exit(1)
+        target.port = int(port)
+    else:
+        target.port = default_port
+
+    target.url = f"{target.scheme}://{target.hostname or target.ip}:{target.port}"
+
+
 def interactive_menu():
     """Interactive target/mode/profile selection for live ReconForge execution.
 
-    The current UI is target-first. For backward compatibility with older
-    ReconForge callers/tests, a first input of exactly 1 or 2 is interpreted
-    as the legacy mode-first flow.
+    The normal workflow is target-first. A legacy mode/profile/target input
+    sequence remains supported so existing ReconForge callers continue to
+    work while the new interface is used by normal interactive sessions.
     """
     try:
         print("+----------------------------------------------------------+")
@@ -37,8 +63,8 @@ def interactive_menu():
             print("[!] Target cannot be empty.")
             sys.exit(1)
 
-        # Legacy compatibility: old callers supplied mode, profile, target.
-        if first in {"1", "2"}:
+        legacy = first in {"1", "2"}
+        if legacy:
             mode = _read_mode(first)
             profile = _read_profile(input("Select discovery profile [1-3]: ").strip())
             target_input = input("Enter IP or URL: ").strip()
@@ -63,18 +89,7 @@ def interactive_menu():
             mode = _read_mode(input("Select option [1-2]: ").strip())
 
         target.mode = mode
-
-        if target.target_type == "url" and target.port is None:
-            default_port = 443 if target.scheme == "https" else 80
-            port = input(f"Port [{default_port}]: ").strip()
-            if port:
-                if not port.isdigit() or not 1 <= int(port) <= 65535:
-                    print("[!] Invalid port. Please enter 1-65535.")
-                    sys.exit(1)
-                target.port = int(port)
-            else:
-                target.port = default_port
-            target.url = f"{target.scheme}://{target.hostname or target.ip}:{target.port}"
+        _set_url_port(target, legacy=legacy)
 
         if profile is None:
             print("\nContent Discovery Profile\n")
