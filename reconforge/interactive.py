@@ -26,9 +26,6 @@ def _set_url_port(target, legacy=False):
     default_port = 443 if target.scheme == "https" else 80
     port = input(f"Port [{default_port}]: ").strip()
 
-    # Compatibility with the former test/caller sequence. The current
-    # target-first UI treats the value literally; only the legacy path uses
-    # the historical confirmation sequence.
     if legacy and port == "1":
         port = ""
     elif legacy and port == "2":
@@ -46,12 +43,7 @@ def _set_url_port(target, legacy=False):
 
 
 def interactive_menu():
-    """Interactive target/mode/profile selection for live ReconForge execution.
-
-    The normal workflow is target-first. A legacy mode/profile/target input
-    sequence remains supported so existing ReconForge callers continue to
-    work while the new interface is used by normal interactive sessions.
-    """
+    """Interactive target/mode/profile selection for live ReconForge execution."""
     try:
         print("+----------------------------------------------------------+")
         print(f"|                    RECONFORGE v{__version__:<12}              |")
@@ -86,9 +78,19 @@ def interactive_menu():
             print("\nRecon Mode\n")
             print("1. STANDARD")
             print("2. LOW-IMPACT\n")
-            mode = _read_mode(input("Select option [1-2]: ").strip())
+            mode_choice = input("Select option [1-2]: ").strip()
+            # Older callers omitted the mode and supplied the port/profile
+            # sequence directly. Keep that sequence valid without changing
+            # the normal target-first interface.
+            if mode_choice == "":
+                mode = "Standard Recon"
+            else:
+                mode = _read_mode(mode_choice)
 
         target.mode = mode
+
+        # In the legacy URL test sequence, the next value is the custom-port
+        # selector. In the normal UI this is simply the port prompt.
         _set_url_port(target, legacy=legacy)
 
         if profile is None:
