@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlparse
 from typing import List, Tuple
 
-from reconforge.core.models import Host, Finding, WebEndpoint, Technology, Confidence, FindingType
+from reconforge.core.models import Host, Finding, WebEndpoint, Technology, Confidence, FindingType, Evidence
 from reconforge.parsers.base import BaseParser
 
 
@@ -12,7 +12,7 @@ class HTTPParser(BaseParser):
     def can_parse(cls, file_path: str) -> bool:
         if not file_path.endswith('.txt'):
             return False
-        content = cls.read_file_safe(file_path)[:500]
+        content = cls.read_file_safe(file_path)[:800]
         return "HTTP/1." in content and ("Server:" in content or "Content-Type:" in content)
 
     @classmethod
@@ -26,22 +26,39 @@ class HTTPParser(BaseParser):
             return hosts, findings, ["Failed to read HTTP headers file"]
 
         filename = os.path.basename(file_path)
+        request_match = re.search(r'(?im)^(?:Request-URL|URL):\s*(\S+)', content)
+        endpoint_url = request_match.group(1).strip() if request_match else ""
+        parsed = urlparse(endpoint_url) if endpoint_url else None
+        host_name = parsed.hostname if parsed else None
+
         ip_guess = "unknown"
         ip_match = re.search(r'(\d{1,3}(?:\.\d{1,3}){3})', filename)
         if ip_match:
             ip_guess = ip_match.group(1)
+        elif host_name and re.fullmatch(r'\d{1,3}(?:\.\d{1,3}){3}', host_name):
+            ip_guess = host_name
 
         host = Host(ip=ip_guess, status="up")
+        if host_name:
+            host.hostnames.append(host_name)
 
-        # The collector stores only response headers, so create a canonical
-        # web endpoint from the request URL when it is available in the file
-        # metadata, otherwise use the host identity as a stable merge target.
-        server_str = None
+        status_match = re.search(r'(?m)^HTTP/1\.\d\s+(\d{3})', content)
+        status_code = int(status_match.group(1)) if status_match else None
+
+        endpoint = None
+        if endpoint_url:
+            endpoint = WebEndpoint(
+                url=endpoint_url,
+                path=parsed.path or "/",
+                status_code=status_code,
+                source=filename,
+            )
+
         server_match = re.search(r'(?i)^Server:\s*(.+)$', content, re.MULTILINE)
         if server_match:
             server_str = server_match.group(1).strip()
             parts = server_str.split()
-            name = parts[0]
+            name = parts[0] if parts else ""
             version = None
             if "/" in name:
                 name, version = name.split("/", 1)
@@ -54,37 +71,19 @@ class HTTPParser(BaseParser):
                 confidence=Confidence.HIGH,
             )
 
-            # Attach the technology to a WebEndpoint. The previous parser
-            # constructed this Technology but never attached it to the model,
-            # which caused confirmed server technology to disappear from the
-            # WEB TECHNOLOGY report and from service-aware discovery context.
-            endpoint_url = None
-            url_match = re.search(r'(?im)^(?:Request-URL|URL):\s*(\S+)', content)
-            if url_match:
-                endpoint_url = url_match.group(1)
-
-            if endpoint_url:
-                parsed = urlparse(endpoint_url)
+            if endpoint is None:
+                scheme = "https" if re.search(r'(?i)443', filename) else "http"
+                fallback_url = f"{scheme}://{ip_guess}" if ip_guess != "unknown" else "http://unknown"
                 endpoint = WebEndpoint(
-                    url=endpoint_url,
-                    path=parsed.path or "/",
-                    status_code=None,
-                    source=filename,
-                    technologies=[tech],
-                )
-            else:
-                scheme = "https" if "443" in filename else "http"
-                endpoint_url = f"{scheme}://{ip_guess}" if ip_guess != "unknown" else "http://unknown"
-                endpoint = WebEndpoint(
-                    url=endpoint_url,
+                    url=fallback_url,
                     path="/",
-                    status_code=None,
+                    status_code=status_code,
                     source=filename,
-                    technologies=[tech],
                 )
-            host.web_endpoints.append(endpoint)
 
-            finding = Finding(
+            endpoint.technologies.append(tech)
+
+            host.findings.append(Finding(
                 title="HTTP Server Header Disclosed",
                 finding_type=FindingType.INFORMATION,
                 severity="INFO",
@@ -93,8 +92,13 @@ class HTTPParser(BaseParser):
                 source_file=filename,
                 source_type="HTTPParser",
                 evidence=[Evidence(source_file=filename, source_type="HTTPParser", content=content)],
-            )
-            host.findings.append(finding)
+            ))
+
+        if endpoint is not None and not any(
+            e.url == endpoint.url and e.status_code == endpoint.status_code
+            for e in host.web_endpoints
+        ):
+            host.web_endpoints.append(endpoint)
 
         if host.web_endpoints or host.findings:
             hosts.append(host)
