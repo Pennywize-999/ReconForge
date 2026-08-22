@@ -2,7 +2,7 @@ import os
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from reconforge.tools.models import ToolExecutionPlan
 from reconforge.core.config import load_config
@@ -65,9 +65,14 @@ class ToolExecutor:
                 text=True,
                 timeout=timeout,
                 shell=False,
+                # Never allow an external reconnaissance utility to consume
+                # the user's terminal input. Some tools can pause when stdin is
+                # attached to a TTY, which previously looked like a frozen scan
+                # until the user pressed Space/Enter.
+                stdin=subprocess.DEVNULL,
             )
-            stdout_content = result.stdout
-            stderr_content = result.stderr
+            stdout_content = result.stdout or ""
+            stderr_content = result.stderr or ""
             return_code = result.returncode
             success = return_code == 0
             if not success:
