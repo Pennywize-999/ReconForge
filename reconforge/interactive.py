@@ -1,7 +1,23 @@
 import sys
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+
 from reconforge import __version__
 from reconforge.core.target_parser import parse_target
+
+
+console = Console(highlight=False)
+
+
+def _show_banner():
+    """Render a compact, clean terminal banner without broken box characters."""
+    banner = Text(justify="center")
+    banner.append("RECONFORGE", style="bold bright_cyan")
+    banner.append(f"  v{__version__}\n", style="bold white")
+    banner.append("FIRST-LEVEL RECONNAISSANCE ENGINE", style="bright_blue")
+    console.print(Panel(banner, border_style="bright_cyan", width=60, padding=(0, 2)))
 
 
 def _read_mode(choice):
@@ -25,9 +41,6 @@ def _set_url_port(target, legacy=False, selector=False):
 
     default_port = 443 if target.scheme == "https" else 80
 
-    # parse_target already supplies the scheme's default port. We still ask
-    # for a port during interactive execution when the user did not specify
-    # one explicitly in the original URL.
     explicit_port = False
     try:
         explicit_port = ":" in target.input.rsplit("/", 1)[-1]
@@ -69,10 +82,7 @@ def _set_url_port(target, legacy=False, selector=False):
 def interactive_menu():
     """Interactive target/mode/profile selection for live ReconForge execution."""
     try:
-        print("+----------------------------------------------------------+")
-        print(f"|                    RECONFORGE v{__version__:<12}              |")
-        print("|           FIRST-LEVEL RECONNAISSANCE ENGINE               |")
-        print("+----------------------------------------------------------+\n")
+        _show_banner()
 
         first = input("Enter IP or URL: ").strip()
         if not first:
@@ -104,8 +114,6 @@ def interactive_menu():
             print("1. STANDARD")
             print("2. LOW-IMPACT\n")
             mode_choice = input("Select option [1-2]: ").strip()
-            # Preserve the older caller sequence where an empty mode answer
-            # is followed by a default/custom port selector.
             if mode_choice == "":
                 mode = "Standard Recon"
                 compat_port_selector = True
@@ -125,10 +133,10 @@ def interactive_menu():
         target.discovery_profile = profile
         target.source = "interactive_execute"
 
-        print("\nStarting ReconForge...")
-        print(f"Target:   {target.url or target.input}")
-        print(f"Mode:     {target.mode}")
-        print(f"Profile:  {target.discovery_profile}")
+        console.print("\n[bold bright_cyan]Starting ReconForge...[/bold bright_cyan]")
+        console.print(f"[bold white]Target:[/bold white]   {target.url or target.input}")
+        console.print(f"[bold white]Mode:[/bold white]     {target.mode}")
+        console.print(f"[bold white]Profile:[/bold white]  [bright_cyan]{target.discovery_profile}[/bright_cyan]\n")
         return target
     except KeyboardInterrupt:
         print("\n[!] ReconForge cancelled.")
