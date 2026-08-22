@@ -1,5 +1,6 @@
+from typing import Any, Dict
+
 from reconforge.core.models import ReconTarget, ReconPlan
-from typing import Dict, Any
 
 
 class ReconPlanner:
@@ -8,23 +9,28 @@ class ReconPlanner:
 
     def plan(self, target: ReconTarget) -> ReconPlan:
         modules = []
+        components = []
         metadata: Dict[str, Any] = {
             "discovery_profile": target.discovery_profile.upper(),
-            "components": [],
+            "components": components,
         }
 
         if target.target_type == "ip":
-            modules.extend(["ForgeScan", "Service Intelligence"])
-            metadata["components"].append("ForgeScan")
+            modules.extend(["ForgeScan", "Network Analysis (Nmap)", "Service Intelligence"])
+            components.append("ForgeScan")
         elif target.target_type == "url":
-            modules.extend(["ForgeProbe", "ForgeTech", "ForgeDiscover"])
-            metadata["components"].extend(["ForgeProbe", "ForgeTech", "ForgeDiscover"])
+            modules.extend([
+                "ForgeProbe", "Web Analysis",
+                "ForgeTech", "Technology Identification (WhatWeb)",
+                "ForgeDiscover",
+            ])
+            components.extend(["ForgeProbe", "ForgeTech", "ForgeDiscover"])
             if target.scheme == "https":
-                modules.append("ForgeTLS")
-                metadata["components"].append("ForgeTLS")
+                modules.extend(["ForgeTLS", "TLS Analysis"])
+                components.append("ForgeTLS")
 
         modules.extend(["ForgeCore", "ForgeIntel", "ForgeReport"])
-        metadata["components"].extend(["ForgeCore", "ForgeIntel", "ForgeReport"])
+        components.extend(["ForgeCore", "ForgeIntel", "ForgeReport"])
 
         if target.mode == "WAF-Aware Low-Impact Recon":
             metadata.update({
