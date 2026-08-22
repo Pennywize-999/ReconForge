@@ -60,7 +60,8 @@ class RealExecutionBackend(ExecutionBackend):
         self.analyzer = Analyzer()
         self.vulnerability_intel = VulnerabilityIntel()
         self.dns_adapter = DNSAdapter()
-        self.http_adapters = [HttpCollectorAdapter(), WhatWebAdapter()]
+        self.http_collector = HttpCollectorAdapter()
+        self.whatweb_adapter = WhatWebAdapter()
         self.discovery_adapters = [GobusterAdapter(), DirbAdapter()]
         self.tls_adapter = TlsCollectorAdapter()
 
@@ -130,14 +131,36 @@ class RealExecutionBackend(ExecutionBackend):
         return final_target
 
     def _run_web_intelligence(self, target, plan, results):
-        for adapter in self.http_adapters:
-            if adapter.supports_target(target):
-                tp = adapter.build_plan(target, plan.output_directory)
-                if tp:
-                    self._run_plan(tp, target.input, results)
+        # ForgeProbe is the fast, deterministic source for HTTP response
+        # headers. Always collect it first so confirmed server technology is
+        # available before deciding whether expensive WhatWeb fingerprinting is
+        # necessary.
+        if self.http_collector.supports_target(target):
+            tp = self.http_collector.build_plan(target, plan.output_directory)
+            if tp:
+                self._run_plan(tp, target.input, results)
 
         analyzed = self.analyzer.analyze_directory(plan.output_directory)
         technologies, services = self._technology_context(analyzed, target)
+
+        # WhatWeb is a secondary fingerprinting layer, not a prerequisite for
+        # the rest of the reconnaissance pipeline. On COMMON/EXTENDED profiles,
+        # skip it when ForgeProbe already supplied confirmed technology. This
+        # prevents redundant aggressive fingerprinting from consuming the run's
+        # time budget. DEEP explicitly requests the additional fingerprinting.
+        run_whatweb = target.discovery_profile.upper() == "DEEP" or not technologies
+        if run_whatweb and self.whatweb_adapter.supports_target(target):
+            tp = self.whatweb_adapter.build_plan(
+                target,
+                plan.output_directory,
+                discovery_profile=target.discovery_profile,
+            )
+            if tp:
+                self._run_plan(tp, target.input, results)
+            analyzed = self.analyzer.analyze_directory(plan.output_directory)
+            technologies, services = self._technology_context(analyzed, target)
+        else:
+            self.console.print("  [OK] ForgeTech: skipped, confirmed technology already available")
 
         self.console.print("  TECHNOLOGY INTELLIGENCE")
         for value in technologies:
@@ -181,18 +204,9 @@ class RealExecutionBackend(ExecutionBackend):
         label = DISPLAY_NAMES.get(tp.tool, tp.tool)
         self.console.print(f"  [>] {label}: running")
 
-        # Keep subprocess output deterministic. Rich Live/status rendering can
-        # leave large blank regions or appear frozen in some terminals and TTY
-        # multiplexers. The subprocess remains synchronous and bounded by the
-        # executor timeout.
         result = self.executor.execute(tp)
         results.append(result)
 
-        # DNS is special: a target having no PTR/A record is normal discovery
-        # information, not a failed ReconForge component. Classify DNS output
-        # before checking the process return code because BIND's `host` utility
-        # has historically returned different codes for NXDOMAIN/no-record
-        # responses across versions/platforms.
         if tp.tool == "dns_lookup":
             dns_state = self._classify_dns_result(result)
             if dns_state == "no-record":
@@ -218,47 +232,25 @@ class RealExecutionBackend(ExecutionBackend):
 
     @staticmethod
     def _classify_dns_result(result) -> str:
-        """Classify host(1) results without treating normal no-record replies as errors."""
         text = f"{result.stdout}\n{result.stderr}\n{result.error}".lower()
-
         resolver_error_markers = (
-            "servfail",
-            "connection timed out",
-            "query timed out",
-            "timed out",
-            "no servers could be reached",
-            "connection refused",
-            "network is unreachable",
-            "temporary failure in name resolution",
-            "communications error",
-            "network unreachable",
-            "connection reset",
-            "connection refused",
+            "servfail", "connection timed out", "query timed out", "timed out",
+            "no servers could be reached", "connection refused", "network is unreachable",
+            "temporary failure in name resolution", "communications error",
+            "network unreachable", "connection reset",
         )
         if any(marker in text for marker in resolver_error_markers):
             return "resolver-error"
 
         no_record_markers = (
-            "nxdomain",
-            "host not found",
-            "not found:",
-            "no such host",
-            "domain name not found",
-            "can't find",
-            "cannot find",
-            "has no address",
-            "no address associated",
-            "name or service not known",
-            "non-existent domain",
-            "no ptr record",
-            "no address",
+            "nxdomain", "host not found", "not found:", "no such host",
+            "domain name not found", "can't find", "cannot find", "has no address",
+            "no address associated", "name or service not known", "non-existent domain",
+            "no ptr record", "no address",
         )
         if any(marker in text for marker in no_record_markers):
             return "no-record"
 
-        # `host` output can vary by BIND version. A reverse lookup that exits
-        # non-zero without resolver-failure markers is still generally a
-        # no-record result. Keep true resolver failures above this fallback.
         if result.tool == "dns_lookup" and not result.timed_out:
             return "no-record"
 
@@ -304,6 +296,9 @@ class RealExecutionBackend(ExecutionBackend):
         ignored = {"country", "ip", "title", "httpserver", "url"}
 
         for host in target.hosts.values():
+            if host.ip != web_target.ip:
+                continue
+
             for port in host.ports:
                 if port.number == web_target.port and port.service:
                     if port.service.name:
@@ -314,7 +309,8 @@ class RealExecutionBackend(ExecutionBackend):
                         services.append(port.service.version)
 
             for endpoint in host.web_endpoints:
-                if endpoint.url.rstrip("/") == web_target.url.rstrip("/"):
+                endpoint_host = endpoint.url.split("://", 1)[-1].split("/", 1)[0]
+                if endpoint_host == f"{web_target.ip}:{web_target.port}" or endpoint_host == web_target.ip:
                     for tech in endpoint.technologies:
                         if tech.name.lower() in ignored:
                             continue
