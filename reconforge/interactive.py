@@ -4,23 +4,65 @@ from reconforge import __version__
 from reconforge.core.target_parser import parse_target
 
 
+def _read_mode(choice):
+    if choice not in {"1", "2"}:
+        print("[!] Invalid option.")
+        sys.exit(1)
+    return "Standard Recon" if choice == "1" else "WAF-Aware Low-Impact Recon"
+
+
+def _read_profile(choice):
+    profiles = {"1": "COMMON", "2": "EXTENDED", "3": "DEEP"}
+    if choice not in profiles:
+        print("[!] Invalid option.")
+        sys.exit(1)
+    return profiles[choice]
+
+
 def interactive_menu():
-    """Interactive target/mode/profile selection for live ReconForge execution."""
+    """Interactive target/mode/profile selection for live ReconForge execution.
+
+    The current UI is target-first. For backward compatibility with older
+    ReconForge callers/tests, a first input of exactly 1 or 2 is interpreted
+    as the legacy mode-first flow.
+    """
     try:
         print("+----------------------------------------------------------+")
         print(f"|                    RECONFORGE v{__version__:<12}              |")
         print("|           FIRST-LEVEL RECONNAISSANCE ENGINE               |")
         print("+----------------------------------------------------------+\n")
 
-        target_input = input("Enter IP or URL: ").strip()
+        first = input("Enter IP or URL: ").strip()
+        if not first:
+            print("[!] Target cannot be empty.")
+            sys.exit(1)
+
+        # Legacy compatibility: old callers supplied mode, profile, target.
+        if first in {"1", "2"}:
+            mode = _read_mode(first)
+            profile = _read_profile(input("Select discovery profile [1-3]: ").strip())
+            target_input = input("Enter IP or URL: ").strip()
+        else:
+            target_input = first
+            mode = None
+            profile = None
+
         if not target_input:
             print("[!] Target cannot be empty.")
             sys.exit(1)
 
-        target = parse_target(target_input, mode="Standard Recon", source="interactive")
+        target = parse_target(target_input, mode=mode or "Standard Recon", source="interactive")
         if target.target_type == "unknown":
             print("[!] Enter a valid IP address or http:// / https:// URL.")
             sys.exit(1)
+
+        if mode is None:
+            print("\nRecon Mode\n")
+            print("1. STANDARD")
+            print("2. LOW-IMPACT\n")
+            mode = _read_mode(input("Select option [1-2]: ").strip())
+
+        target.mode = mode
 
         if target.target_type == "url" and target.port is None:
             default_port = 443 if target.scheme == "https" else 80
@@ -34,25 +76,14 @@ def interactive_menu():
                 target.port = default_port
             target.url = f"{target.scheme}://{target.hostname or target.ip}:{target.port}"
 
-        print("\nRecon Mode\n")
-        print("1. STANDARD")
-        print("2. LOW-IMPACT\n")
-        mode_choice = input("Select option [1-2]: ").strip()
-        if mode_choice not in {"1", "2"}:
-            print("[!] Invalid option.")
-            sys.exit(1)
-        target.mode = "Standard Recon" if mode_choice == "1" else "WAF-Aware Low-Impact Recon"
+        if profile is None:
+            print("\nContent Discovery Profile\n")
+            print("1. COMMON")
+            print("2. EXTENDED")
+            print("3. DEEP\n")
+            profile = _read_profile(input("Select option [1-3]: ").strip())
 
-        print("\nContent Discovery Profile\n")
-        print("1. COMMON")
-        print("2. EXTENDED")
-        print("3. DEEP\n")
-        profile_choice = input("Select option [1-3]: ").strip()
-        profiles = {"1": "COMMON", "2": "EXTENDED", "3": "DEEP"}
-        if profile_choice not in profiles:
-            print("[!] Invalid option.")
-            sys.exit(1)
-        target.discovery_profile = profiles[profile_choice]
+        target.discovery_profile = profile
         target.source = "interactive_execute"
 
         print("\nStarting ReconForge...")
