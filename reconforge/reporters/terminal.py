@@ -2,7 +2,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
-from reconforge.core.models import Target, Host, Confidence, FindingType
+from reconforge.core.models import Target, Host, FindingType
+
 
 class TerminalReporter:
     def __init__(self):
@@ -11,220 +12,164 @@ class TerminalReporter:
     def report(self, target: Target):
         self.console.print("\n")
         self.console.print(Panel("[bold white]RECONFORGE ANALYSIS REPORT[/bold white]", expand=False, style="blue"))
-
-        for ip, host in target.hosts.items():
-            self._print_target_section(host)
-            self._print_services_section(host)
-            self._print_web_technology(host)
-            self._print_http_info(host)
-            self._print_directory_enumeration(host)
-            self._print_tls_info(host)
-            self._print_waf_analysis(host)
+        for host in target.hosts.values():
+            self._print_target(host)
+            self._print_services(host)
+            self._print_web(host)
+            self._print_tls(host)
+            self._print_waf(host)
             self._print_findings(host)
             self._print_vulnerabilities(host)
-
-        self._print_execution_section(target)
-        self._print_evidence_section(target)
+            self._print_unclassified(host)
+        self._print_execution(target)
 
     def report_waf(self, target: Target):
-        self.console.print("\n")
         self.console.print(Panel("[bold white]RECONFORGE WAF / CDN ANALYSIS[/bold white]", expand=False, style="blue"))
+        for host in target.hosts.values():
+            if host.waf_analysis:
+                self._print_waf(host)
 
-        for ip, host in target.hosts.items():
-            if host.waf_analysis and host.waf_analysis.detected:
-                self.console.print(f"\n[bold cyan]TARGET: {host.ip}[/bold cyan]")
-                self._print_waf_analysis(host)
-
-    def _print_target_section(self, host: Host):
-        self.console.print(f"\n[bold cyan]TARGET: {host.ip}[/bold cyan]")
-        self.console.print("-" * 60)
-        self.console.print(f"[bold]Status:[/bold] {host.status}")
+    def _print_target(self, host: Host):
+        self.console.print(f"\n[bold cyan]HOST INFORMATION[/bold cyan]\n{'-' * 60}")
+        self.console.print(f"Status:   {host.status}")
+        self.console.print(f"IP:       {host.ip}")
         if host.mac:
-            self.console.print(f"[bold]MAC:[/bold] {host.mac}")
+            self.console.print(f"MAC:      {host.mac}")
         if host.hostnames:
-            self.console.print(f"[bold]Hostname:[/bold] {', '.join(host.hostnames)}")
+            self.console.print(f"Hostname: {', '.join(host.hostnames)}")
         if host.ipv6:
-            self.console.print(f"[bold]IPv6:[/bold] {host.ipv6}")
-        if host.os_guesses or host.os_cpes:
-            os_info = host.os_guesses + host.os_cpes
-            self.console.print(f"[bold]OS:[/bold] {', '.join(os_info[:3])}")
+            self.console.print(f"IPv6:     {host.ipv6}")
+        if host.os_guesses:
+            self.console.print(f"OS:       {', '.join(host.os_guesses[:3])}")
 
-    def _print_services_section(self, host: Host):
+    def _print_services(self, host: Host):
         if not host.ports:
             return
-        self.console.print("\n[bold cyan]SERVICES[/bold cyan]")
-        self.console.print("-" * 60)
-        table = Table(box=None, show_header=True, pad_edge=False)
-        table.add_column("PORT", style="bold")
-        table.add_column("PROTOCOL")
-        table.add_column("SERVICE")
-        table.add_column("PRODUCT")
-        table.add_column("VERSION")
-
+        self.console.print("\n[bold cyan]OPEN PORTS / SERVICES[/bold cyan]\n" + "-" * 60)
+        table = Table(box=None, pad_edge=False)
+        for col in ("PORT", "STATE", "SERVICE", "PRODUCT", "VERSION"):
+            table.add_column(col)
         for port in host.ports:
-            s_name = port.service.name if port.service else "unknown"
-            s_product = port.service.product if port.service else ""
-            s_version = port.service.version if port.service else ""
-            table.add_row(f"{port.number}/{port.protocol}", port.protocol, s_name, s_product, s_version)
-
+            service = port.service
+            table.add_row(
+                f"{port.number}/{port.protocol}",
+                port.state,
+                service.name if service else "unknown",
+                service.product if service else "",
+                service.version if service else "",
+            )
         self.console.print(table)
 
-    def _print_web_technology(self, host: Host):
+    def _print_web(self, host: Host):
         if not host.web_endpoints:
             return
-        techs = set()
-        servers = set()
-        titles = set()
-        for ep in host.web_endpoints:
-            for tech in ep.technologies:
-                if tech.name == "Server":
-                    servers.add(tech.version or tech.detected_values[0] if tech.detected_values else "Unknown")
-                elif tech.name == "Title":
-                    titles.add(tech.version or tech.detected_values[0] if tech.detected_values else "Unknown")
-                else:
-                    techs.add(tech.name)
+        self.console.print("\n[bold cyan]WEB TECHNOLOGY[/bold cyan]\n" + "-" * 60)
+        techs = {}
+        for endpoint in host.web_endpoints:
+            for tech in endpoint.technologies:
+                value = tech.version or (tech.detected_values[0] if tech.detected_values else "")
+                techs.setdefault(tech.name, set()).add(value)
+        for name, values in sorted(techs.items()):
+            clean = ", ".join(v for v in values if v) or "Detected"
+            self.console.print(f"{name}: {clean}")
 
-        if servers or techs or titles:
-            self.console.print("\n[bold cyan]WEB TECHNOLOGY[/bold cyan]")
-            self.console.print("-" * 60)
-            if servers:
-                self.console.print(f"    Server: {', '.join(servers)}")
-            if techs:
-                self.console.print(f"    Technologies: {', '.join(techs)}")
-            if titles:
-                self.console.print(f"    Title: {', '.join(titles)}")
+        self.console.print("\n[bold cyan]DISCOVERED / INTERESTING URLS[/bold cyan]\n" + "-" * 60)
+        seen = set()
+        for endpoint in sorted(host.web_endpoints, key=lambda e: (e.url, e.status_code or 0)):
+            key = (endpoint.url, endpoint.status_code)
+            if key in seen:
+                continue
+            seen.add(key)
+            status = endpoint.status_code if endpoint.status_code is not None else "UNKNOWN"
+            significance = self._url_significance(endpoint.status_code, endpoint.category)
+            self.console.print(f"{endpoint.url}\n    Status: {status}\n    Significance: {significance}")
 
-    def _print_http_info(self, host: Host):
-        if not host.web_endpoints:
+    @staticmethod
+    def _url_significance(status, category):
+        if status in (200, 201, 204):
+            return "Accessible resource"
+        if status in (301, 302, 307, 308):
+            return "Redirect"
+        if status in (401,):
+            return "Authentication required"
+        if status in (403,):
+            return "Protected resource"
+        if status in (405,):
+            return "Method-specific endpoint"
+        if status and status >= 500:
+            return "Server/application error"
+        if status and status not in (404,):
+            return "Unusual HTTP response"
+        return category or "Observed resource"
+
+    def _print_tls(self, host: Host):
+        tls = [f for f in host.findings if f.source_type == "TLSParser"]
+        if not tls:
             return
+        self.console.print("\n[bold cyan]TLS / CERTIFICATES[/bold cyan]\n" + "-" * 60)
+        for finding in tls:
+            self.console.print(f"{finding.title}: {finding.description}")
 
-        has_http = False
-        for ep in host.web_endpoints:
-            if ep.status_code and ep.category != "Directory":
-                if not has_http:
-                    self.console.print("\n[bold cyan]HTTP[/bold cyan]")
-                    self.console.print("-" * 60)
-                    has_http = True
-                self.console.print(f"    URL: {ep.url}")
-                self.console.print(f"    Status: {ep.status_code}")
-                # We can print content type and server if they are in technologies
-                ct = next((t for t in ep.technologies if t.name == "Content-Type"), None)
-                if ct and ct.detected_values:
-                    self.console.print(f"    Content-Type: {ct.detected_values[0]}")
-                self.console.print("")
-
-    def _print_directory_enumeration(self, host: Host):
-        gobuster_paths = []
-        dirb_paths = []
-
-        for ep in host.web_endpoints:
-            if ep.category == "Directory":
-                if "Gobuster" in ep.source:
-                    gobuster_paths.append(ep)
-                elif "Dirb" in ep.source:
-                    dirb_paths.append(ep)
-
-        if gobuster_paths or dirb_paths:
-            self.console.print("\n[bold cyan]DIRECTORY ENUMERATION[/bold cyan]")
-            self.console.print("-" * 60)
-
-            if gobuster_paths:
-                self.console.print("    Gobuster:")
-                for ep in gobuster_paths:
-                    self.console.print(f"       {ep.path} (Status: {ep.status_code})")
-                self.console.print("")
-
-            if dirb_paths:
-                self.console.print("    Dirb:")
-                for ep in dirb_paths:
-                    self.console.print(f"       {ep.path} (Status: {ep.status_code})")
-                self.console.print("")
-
-    def _print_tls_info(self, host: Host):
-        has_tls = False
-        for finding in host.findings:
-            if finding.source_type == "TLSParser":
-                if not has_tls:
-                    self.console.print("\n[bold cyan]TLS[/bold cyan]")
-                    self.console.print("-" * 60)
-                    has_tls = True
-                self.console.print(f"    {finding.title}: {finding.description}")
-        if has_tls:
-            self.console.print("")
-
-    def _print_waf_analysis(self, host: Host):
-        if not host.waf_analysis:
-            return
+    def _print_waf(self, host: Host):
         waf = host.waf_analysis
-        self.console.print("\n[bold cyan]WAF / CDN ANALYSIS[/bold cyan]")
-        self.console.print("-" * 60)
-        self.console.print(f"Detection:       {'[red]Possible[/red]' if waf.detected else 'None'}")
+        if not waf:
+            return
+        self.console.print("\n[bold cyan]WAF / CDN ANALYSIS[/bold cyan]\n" + "-" * 60)
+        self.console.print(f"Detection:     {'Possible' if waf.detected else 'None'}")
+        self.console.print(f"Confidence:    {waf.confidence.value}")
         if waf.provider:
-            self.console.print(f"Provider:        {waf.provider} (Confidence: {waf.provider_confidence.value})")
-        self.console.print(f"Confidence:      {waf.confidence.value}")
-        rate_limit_status = "Detected" if waf.rate_limiting else "None"
-        self.console.print(f"Rate limiting:   {rate_limit_status}")
+            self.console.print(f"Provider:      {waf.provider}")
+        self.console.print(f"Rate limiting: {'Detected' if waf.rate_limiting else 'None'}")
         for status, count in waf.status_counts.items():
-            if status in ["403", "429"]:
-                self.console.print(f"HTTP {status}:        {count}")
-        if waf.low_impact_profile:
-            self.console.print("\n[bold]LOW-IMPACT PROFILE RECOMMENDED[/bold]")
-            self.console.print("Request policy:  Conservative")
-            self.console.print("Respect Retry-After: Yes")
+            if status in {"403", "429"}:
+                self.console.print(f"HTTP {status}:    {count}")
 
     def _print_findings(self, host: Host):
-        display_findings = [f for f in host.findings if f.finding_type != FindingType.VULNERABILITY and f.source_type != "TLSParser"]
-        if not display_findings:
+        findings = [f for f in host.findings if f.finding_type != FindingType.VULNERABILITY and f.source_type != "TLSParser"]
+        if not findings:
             return
-        self.console.print("\n[bold cyan]FINDINGS[/bold cyan]")
-        self.console.print("-" * 60)
-        table = Table(box=None, show_header=True, pad_edge=False)
-        table.add_column("TYPE", style="bold")
+        self.console.print("\n[bold cyan]IMPORTANT FINDINGS[/bold cyan]\n" + "-" * 60)
+        table = Table(box=None, pad_edge=False)
+        table.add_column("TYPE")
         table.add_column("SEVERITY")
+        table.add_column("CONFIDENCE")
         table.add_column("TITLE")
-        for finding in display_findings:
-            table.add_row(finding.finding_type.value, finding.severity, finding.title)
+        for finding in findings:
+            table.add_row(finding.finding_type.value, finding.severity, finding.confidence.value, finding.title)
         self.console.print(table)
 
     def _print_vulnerabilities(self, host: Host):
         if not host.vulnerabilities:
             return
-        self.console.print("\n[bold cyan]VULNERABILITY INTELLIGENCE[/bold cyan]")
-        self.console.print("-" * 60)
-        table = Table(box=None, show_header=True, pad_edge=False)
-        table.add_column("CVE", style="bold red")
-        table.add_column("SEVERITY", style="bold")
-        table.add_column("CVSS")
-        table.add_column("CONFIDENCE")
-        table.add_column("PRODUCT")
+        self.console.print("\n[bold cyan]VULNERABILITY INTELLIGENCE[/bold cyan]\n" + "-" * 60)
+        table = Table(box=None, pad_edge=False)
+        for col in ("CVE", "SEVERITY", "CVSS", "CONFIDENCE", "PRODUCT"):
+            table.add_column(col)
         for vuln in host.vulnerabilities:
-            cve = vuln.cve_id or "VULN"
-            cvss = str(vuln.cvss) if vuln.cvss else "N/A"
-            conf = vuln.confidence.value
-            table.add_row(cve, vuln.severity, cvss, conf, vuln.affected_product)
+            table.add_row(vuln.cve_id or "VULN", vuln.severity, str(vuln.cvss or "N/A"), vuln.confidence.value, vuln.affected_product)
         self.console.print(table)
 
-    def _print_execution_section(self, target: Target):
+    def _print_unclassified(self, host: Host):
+        if not host.unclassified:
+            return
+        self.console.print("\n[bold magenta]UNCLASSIFIED INTELLIGENCE[/bold magenta]\n" + "-" * 60)
+        table = Table(box=None, pad_edge=False)
+        for col in ("TYPE", "VALUE", "CONTEXT", "POTENTIAL RELEVANCE", "CONFIDENCE"):
+            table.add_column(col)
+        for item in host.unclassified:
+            table.add_row(item.kind, item.value, item.context[:100], item.potential_relevance, item.confidence.value)
+        self.console.print(table)
+
+    def _print_execution(self, target: Target):
         if not target.execution:
             return
-        self.console.print("\n[bold cyan]EXECUTION[/bold cyan]")
-        self.console.print("-" * 60)
-        for exec_info in target.execution:
-            tool = exec_info.get("tool", "unknown")
-            success = exec_info.get("success", False)
-            if success:
-                self.console.print(f"    {tool}: success")
-            elif exec_info.get("timed_out"):
-                self.console.print(f"    {tool}: timed_out")
+        self.console.print("\n[bold cyan]EXECUTION SUMMARY[/bold cyan]\n" + "-" * 60)
+        for info in target.execution:
+            tool = info.get("tool", "unknown")
+            if info.get("success"):
+                state = "COMPLETED"
+            elif info.get("timed_out"):
+                state = "TIMEOUT"
             else:
-                self.console.print(f"    {tool}: failed")
-
-    def _print_evidence_section(self, target: Target):
-        self.console.print("\n[bold cyan]SESSION EVIDENCE[/bold cyan]")
-        self.console.print("-" * 60)
-        if not target.evidence:
-            self.console.print("  [!] No reconnaissance evidence was collected in this session.")
-        else:
-            for ev in target.evidence:
-                self.console.print(f"  {ev.source_file} ({ev.source_type})")
-        self.console.print("\n")
+                state = "FAILED"
+            self.console.print(f"{tool}: {state}")
