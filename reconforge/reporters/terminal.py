@@ -22,7 +22,6 @@ class TerminalReporter:
             self._print_vulnerabilities(host)
             self._print_unclassified(host)
         self._print_execution(target)
-        self._print_evidence_section(target)
 
     def report_waf(self, target: Target):
         self.console.print(Panel("[bold white]RECONFORGE WAF / CDN ANALYSIS[/bold white]", expand=False, style="cyan"))
@@ -55,8 +54,6 @@ class TerminalReporter:
         techs = {}
         for endpoint in host.web_endpoints:
             for tech in endpoint.technologies:
-                # Metadata plugins are filtered by WhatWebParser, but keep the
-                # report defensive for older session files.
                 if tech.name.lower() in {"country", "ip", "title", "httpserver", "url"}:
                     continue
                 value = tech.version or (tech.detected_values[0] if tech.detected_values else "")
@@ -67,15 +64,23 @@ class TerminalReporter:
         if not techs:
             self.console.print("No confirmed application technologies detected.")
 
-        self.console.print("\n[bold cyan]DISCOVERED / INTERESTING URLS[/bold cyan]\n" + "-" * 60)
+        self.console.print("\n[bold cyan]DISCOVERED / INTERESTING URLS[/bold cyan]")
+        table = Table(box=None, pad_edge=False, expand=True)
+        table.add_column("URL", overflow="fold")
+        table.add_column("STATUS", justify="right")
+        table.add_column("SIGNIFICANCE", overflow="fold")
+
         seen = set()
         for endpoint in sorted(host.web_endpoints, key=lambda e: (e.url, e.status_code or 0)):
             key = (endpoint.url.rstrip("/"), endpoint.status_code)
-            if key in seen: continue
+            if key in seen:
+                continue
             seen.add(key)
             status = endpoint.status_code if endpoint.status_code is not None else "UNKNOWN"
             significance = self._url_significance(endpoint.status_code, endpoint.category)
-            self.console.print(f"{endpoint.url}\n    Status: {status}\n    Significance: {significance}")
+            table.add_row(endpoint.url, str(status), significance)
+
+        self.console.print(table)
 
     @staticmethod
     def _url_significance(status, category):
@@ -139,18 +144,3 @@ class TerminalReporter:
             tool = display_names.get(info.get("tool", "unknown"), info.get("tool", "unknown"))
             state = "COMPLETED" if info.get("success") else ("TIMEOUT" if info.get("timed_out") else "FAILED")
             self.console.print(f"{tool}: {state}")
-
-    def _print_evidence_section(self, target: Target):
-        self.console.print("\n[bold cyan]SESSION EVIDENCE[/bold cyan]\n" + "-" * 60)
-        if not target.evidence:
-            self.console.print("  [!] No reconnaissance evidence was collected in this session.")
-        else:
-            display_names = {"NmapXMLParser":"ForgeScan", "HTTPParser":"ForgeProbe", "WhatWebParser":"ForgeTech", "GobusterParser":"ForgeDiscover", "DirbParser":"ForgeDiscover", "TLSParser":"ForgeTLS", "DNSParser":"ForgeDNS", "GenericTextParser":"ForgeCore"}
-            seen = set()
-            for evidence in target.evidence:
-                label = display_names.get(evidence.source_type, evidence.source_type)
-                key = (evidence.source_file, label)
-                if key in seen: continue
-                seen.add(key)
-                self.console.print(f"  {evidence.source_file} ({label})")
-        self.console.print("\n")
