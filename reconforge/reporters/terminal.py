@@ -12,6 +12,7 @@ class TerminalReporter:
     def report(self, target: Target):
         self.console.print("\n")
         self.console.print(Panel("[bold white]RECONFORGE ANALYSIS REPORT[/bold white]", expand=False, style="cyan"))
+        self._print_evidence_section(target)
         for host in target.hosts.values():
             self._print_target(host)
             self._print_services(host)
@@ -27,6 +28,24 @@ class TerminalReporter:
         for host in target.hosts.values():
             if host.waf_analysis:
                 self._print_waf(host)
+
+    def _print_evidence_section(self, target: Target):
+        """Print collected reconnaissance evidence without exposing internal session paths."""
+        self.console.print("\n[bold cyan]RECONNAISSANCE EVIDENCE[/bold cyan]\n" + "-" * 60)
+        if not target.evidence:
+            self.console.print("No reconnaissance evidence was collected.")
+            return
+
+        table = Table(box=None, pad_edge=False, expand=True)
+        for col in ("SOURCE TYPE", "SOURCE", "EVIDENCE"): 
+            table.add_column(col, overflow="fold")
+        for evidence in target.evidence:
+            table.add_row(
+                evidence.source_type or "UNKNOWN",
+                evidence.source_file or "UNKNOWN",
+                evidence.content or "",
+            )
+        self.console.print(table)
 
     def _print_target(self, host: Host):
         self.console.print(f"\n[bold cyan]HOST INFORMATION[/bold cyan]\n{'-' * 60}")
