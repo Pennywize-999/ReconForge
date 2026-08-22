@@ -21,7 +21,6 @@ class TerminalReporter:
             self._print_findings(host)
             self._print_vulnerabilities(host)
             self._print_unclassified(host)
-        self._print_execution(target)
 
     def report_waf(self, target: Target):
         self.console.print(Panel("[bold white]RECONFORGE WAF / CDN ANALYSIS[/bold white]", expand=False, style="cyan"))
@@ -69,7 +68,6 @@ class TerminalReporter:
         table.add_column("URL", overflow="fold")
         table.add_column("STATUS", justify="right")
         table.add_column("SIGNIFICANCE", overflow="fold")
-
         seen = set()
         for endpoint in sorted(host.web_endpoints, key=lambda e: (e.url, e.status_code or 0)):
             key = (endpoint.url.rstrip("/"), endpoint.status_code)
@@ -77,9 +75,7 @@ class TerminalReporter:
                 continue
             seen.add(key)
             status = endpoint.status_code if endpoint.status_code is not None else "UNKNOWN"
-            significance = self._url_significance(endpoint.status_code, endpoint.category)
-            table.add_row(endpoint.url, str(status), significance)
-
+            table.add_row(endpoint.url, str(status), self._url_significance(endpoint.status_code, endpoint.category))
         self.console.print(table)
 
     @staticmethod
@@ -120,27 +116,27 @@ class TerminalReporter:
         self.console.print(table)
 
     def _print_vulnerabilities(self, host: Host):
-        if not host.vulnerabilities: return
         self.console.print("\n[bold cyan]VULNERABILITY INTELLIGENCE[/bold cyan]\n" + "-" * 60)
-        table = Table(box=None, pad_edge=False)
+        if not host.vulnerabilities:
+            self.console.print("No verified vulnerable CPE matches identified.")
+            self.console.print("Only exact versioned CPE matches verified by the vulnerability source are reported.")
+            return
+        table = Table(box=None, pad_edge=False, expand=True)
         for col in ("CVE", "SEVERITY", "CVSS", "CONFIDENCE", "PRODUCT"): table.add_column(col)
-        for vuln in host.vulnerabilities: table.add_row(vuln.cve_id or "VULN", vuln.severity, str(vuln.cvss or "N/A"), vuln.confidence.value, vuln.affected_product)
+        for vuln in sorted(host.vulnerabilities, key=lambda v: (v.severity, v.cve_id or "")):
+            table.add_row(vuln.cve_id or "VULN", vuln.severity, str(vuln.cvss if vuln.cvss is not None else "N/A"), vuln.confidence.value, vuln.affected_product)
         self.console.print(table)
+        detail = Table(box=None, pad_edge=False, expand=True)
+        for col in ("CVE", "DETECTED VERSION", "SOURCE", "REFERENCES"): detail.add_column(col, overflow="fold")
+        for vuln in host.vulnerabilities:
+            detail.add_row(vuln.cve_id or "VULN", vuln.detected_version or "unknown", vuln.source or "unknown", str(len(vuln.references)))
+        self.console.print(detail)
 
     def _print_unclassified(self, host: Host):
         if not host.unclassified: return
         self.console.print("\n[bold magenta]UNCLASSIFIED INTELLIGENCE[/bold magenta]\n" + "-" * 60)
-        table = Table(box=None, pad_edge=False)
-        for col in ("TYPE", "VALUE", "CONTEXT", "POTENTIAL RELEVANCE", "CONFIDENCE"): table.add_column(col)
+        table = Table(box=None, pad_edge=False, expand=True)
+        for col in ("TYPE", "VALUE", "CONTEXT", "POTENTIAL RELEVANCE", "CONFIDENCE"): table.add_column(col, overflow="fold")
         for item in host.unclassified:
             table.add_row(item.kind, item.value, item.context[:100], item.potential_relevance, item.confidence.value)
         self.console.print(table)
-
-    def _print_execution(self, target: Target):
-        if not target.execution: return
-        self.console.print("\n[bold cyan]EXECUTION SUMMARY[/bold cyan]\n" + "-" * 60)
-        display_names = {"nmap":"ForgeScan", "http_collector":"ForgeProbe", "whatweb":"ForgeTech", "gobuster":"ForgeDiscover", "dirb":"ForgeDiscover", "tls_collector":"ForgeTLS", "dns_lookup":"ForgeDNS"}
-        for info in target.execution:
-            tool = display_names.get(info.get("tool", "unknown"), info.get("tool", "unknown"))
-            state = "COMPLETED" if info.get("success") else ("TIMEOUT" if info.get("timed_out") else "FAILED")
-            self.console.print(f"{tool}: {state}")
