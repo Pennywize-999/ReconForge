@@ -1,6 +1,6 @@
 # ReconForge
 
-**ReconForge v0.2.0** is a first-level reconnaissance and security-assessment framework for Kali Linux and Unix-like environments. It combines network discovery, DNS intelligence, service-aware enumeration, web technology detection, content discovery, vulnerability intelligence, correlation, and clean reporting into one workflow.
+**ReconForge v1.0.0** is a first-level reconnaissance and security-assessment framework for Kali Linux and Unix-like environments. It combines network discovery, DNS intelligence, service-aware enumeration, web technology detection, content discovery, vulnerability intelligence, correlation, and clean reporting into one workflow.
 
 > **Authorized use only.** Use ReconForge only on systems you own or have explicit permission to assess, including authorized penetration tests, CTFs, labs, and security research.
 
@@ -43,7 +43,7 @@ Collects DNS-related information when applicable:
 - Hostname/IP relationships
 - DNS errors and unavailable records
 
-If DNS is unavailable or not applicable, the rest of the reconnaissance workflow can continue.
+A missing DNS/PTR record is reported as an informational result, not as a tool failure. Genuine resolver or execution errors are reported separately, and the rest of the reconnaissance workflow continues.
 
 ## ForgeScan
 
