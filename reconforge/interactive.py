@@ -53,6 +53,7 @@ def interactive_menu():
             print("[!] Invalid option.")
             sys.exit(1)
         target.discovery_profile = profiles[profile_choice]
+        target.source = "interactive_execute"
 
         print("\nStarting ReconForge...")
         print(f"Target:   {target.url or target.input}")
@@ -65,3 +66,17 @@ def interactive_menu():
     except EOFError:
         print("\n[!] Input stream closed.")
         sys.exit(1)
+
+
+def install_cli_overrides(cli_module):
+    """Keep existing CLI commands, but make the interactive path execute for real."""
+    from reconforge.execution.backend import PlanningOnlyBackend, RealExecutionBackend
+
+    class InteractiveBackend(PlanningOnlyBackend):
+        def execute(self, plan):
+            if plan.target.source == "interactive_execute":
+                return RealExecutionBackend().execute(plan)
+            return super().execute(plan)
+
+    cli_module.interactive_menu = interactive_menu
+    cli_module.PlanningOnlyBackend = InteractiveBackend
