@@ -154,6 +154,18 @@ class Analyzer:
                         host.unclassified.append(item)
 
     def _merge_host(self, target: Target, new_host: Host):
+        # Parsers that operate on standalone HTTP/content files may not have
+        # enough information to identify the target and therefore emit an
+        # "unknown" host. Once a concrete host has been discovered by Nmap or
+        # another parser, never create a second unknown host. Merge that data
+        # into the existing concrete host instead. This prevents duplicate
+        # reports such as HOST INFORMATION -> IP: unknown at report time.
+        if new_host.ip == "unknown":
+            known_hosts = [h for h in target.hosts.values() if h.ip != "unknown"]
+            if len(known_hosts) == 1:
+                self._merge_host_data(known_hosts[0], new_host)
+                return
+
         existing_host = None
         if new_host.ip != "unknown":
             existing_host = target.hosts.get(new_host.ip)
@@ -174,38 +186,41 @@ class Analyzer:
                     break
 
         if existing_host:
-            if new_host.status != "unknown": existing_host.status = new_host.status
-            if new_host.ipv6: existing_host.ipv6 = new_host.ipv6
-            if new_host.mac: existing_host.mac = new_host.mac
-            for hn in new_host.hostnames:
-                if hn not in existing_host.hostnames: existing_host.hostnames.append(hn)
-            for os_guess in new_host.os_guesses:
-                if os_guess not in existing_host.os_guesses: existing_host.os_guesses.append(os_guess)
-            for os_cpe in new_host.os_cpes:
-                if os_cpe not in existing_host.os_cpes: existing_host.os_cpes.append(os_cpe)
-            for new_port in new_host.ports:
-                matched_port = next((p for p in existing_host.ports if p.number == new_port.number and p.protocol == new_port.protocol), None)
-                if matched_port:
-                    if new_port.service and not matched_port.service: matched_port.service = new_port.service
-                    elif new_port.service and matched_port.service: self._merge_technologies(matched_port.service.technologies, new_port.service.technologies)
-                else:
-                    existing_host.ports.append(new_port)
-            for new_endpoint in new_host.web_endpoints:
-                matched_ep = next((e for e in existing_host.web_endpoints if e.url == new_endpoint.url and e.status_code == new_endpoint.status_code), None)
-                if matched_ep: self._merge_technologies(matched_ep.technologies, new_endpoint.technologies)
-                else: existing_host.web_endpoints.append(new_endpoint)
-            for new_vuln in new_host.vulnerabilities:
-                if not new_vuln.cve_id or not any(v.cve_id == new_vuln.cve_id for v in existing_host.vulnerabilities):
-                    existing_host.vulnerabilities.append(new_vuln)
-            for finding in new_host.findings:
-                matched = next((f for f in existing_host.findings if f.title == finding.title and f.source_type == finding.source_type), None)
-                if matched: matched.evidence.extend(finding.evidence)
-                else: existing_host.findings.append(finding)
-            for item in new_host.unclassified:
-                if not any(u.kind == item.kind and u.value == item.value for u in existing_host.unclassified): existing_host.unclassified.append(item)
+            self._merge_host_data(existing_host, new_host)
         else:
             key = new_host.ip if new_host.ip != "unknown" else (new_host.hostnames[0] if new_host.hostnames else "unknown")
             target.hosts[key] = new_host
+
+    def _merge_host_data(self, existing_host: Host, new_host: Host):
+        if new_host.status != "unknown": existing_host.status = new_host.status
+        if new_host.ipv6: existing_host.ipv6 = new_host.ipv6
+        if new_host.mac: existing_host.mac = new_host.mac
+        for hn in new_host.hostnames:
+            if hn not in existing_host.hostnames: existing_host.hostnames.append(hn)
+        for os_guess in new_host.os_guesses:
+            if os_guess not in existing_host.os_guesses: existing_host.os_guesses.append(os_guess)
+        for os_cpe in new_host.os_cpes:
+            if os_cpe not in existing_host.os_cpes: existing_host.os_cpes.append(os_cpe)
+        for new_port in new_host.ports:
+            matched_port = next((p for p in existing_host.ports if p.number == new_port.number and p.protocol == new_port.protocol), None)
+            if matched_port:
+                if new_port.service and not matched_port.service: matched_port.service = new_port.service
+                elif new_port.service and matched_port.service: self._merge_technologies(matched_port.service.technologies, new_port.service.technologies)
+            else:
+                existing_host.ports.append(new_port)
+        for new_endpoint in new_host.web_endpoints:
+            matched_ep = next((e for e in existing_host.web_endpoints if e.url == new_endpoint.url and e.status_code == new_endpoint.status_code), None)
+            if matched_ep: self._merge_technologies(matched_ep.technologies, new_endpoint.technologies)
+            else: existing_host.web_endpoints.append(new_endpoint)
+        for new_vuln in new_host.vulnerabilities:
+            if not new_vuln.cve_id or not any(v.cve_id == new_vuln.cve_id for v in existing_host.vulnerabilities):
+                existing_host.vulnerabilities.append(new_vuln)
+        for finding in new_host.findings:
+            matched = next((f for f in existing_host.findings if f.title == finding.title and f.source_type == finding.source_type), None)
+            if matched: matched.evidence.extend(finding.evidence)
+            else: existing_host.findings.append(finding)
+        for item in new_host.unclassified:
+            if not any(u.kind == item.kind and u.value == item.value for u in existing_host.unclassified): existing_host.unclassified.append(item)
 
     def _merge_technologies(self, base_list: List[Technology], new_list: List[Technology]):
         for new_tech in new_list:
