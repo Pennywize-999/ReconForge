@@ -27,23 +27,22 @@ class DirbAdapter(ToolAdapter):
 
         try:
             from reconforge.core.discovery import DiscoveryEngine
-            discovery = DiscoveryEngine().build(
-                profile,
-                technologies=technologies,
-                services=services,
-            )
+            discovery = DiscoveryEngine().build(profile, technologies=technologies, services=services)
         except Exception:
             discovery = None
 
         generated = os.path.join(output_dir, f"reconforge_{profile.lower()}_wordlist.txt")
         if discovery and discovery.candidates:
-            os.makedirs(output_dir, exist_ok=True)
-            with open(generated, "w", encoding="utf-8") as handle:
-                for candidate in discovery.candidates:
-                    handle.write(candidate.path + "\n")
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+                with open(generated, "w", encoding="utf-8") as handle:
+                    for candidate in discovery.candidates:
+                        handle.write(candidate.path + "\n")
+            except (OSError, PermissionError):
+                generated = ""
 
         fallback = config.default_wordlists + ["/usr/share/wordlists/dirb/common.txt"]
-        wordlist = generated if discovery and discovery.candidates else next(
+        wordlist = generated if generated and os.path.exists(generated) else next(
             (w for w in fallback if os.path.exists(w)), None
         )
         if not wordlist:
