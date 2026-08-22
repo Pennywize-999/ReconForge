@@ -21,13 +21,14 @@ class WhatWebAdapter(ToolAdapter):
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> ToolExecutionPlan:
         output_file = os.path.join(output_dir, f"{self.tool_name}.txt")
 
-        # Keep aggressive fingerprinting, but bound concurrency and socket timeouts
-        # so an unresponsive service cannot make ReconForge appear stuck.
+        # Aggressive fingerprinting is useful, but it must never hold the
+        # complete reconnaissance run indefinitely. The executor also applies
+        # a hard process timeout as a second safety boundary.
         args = [
             "-a", "3",
-            "-t", "10",
-            "--open-timeout", "8",
-            "--read-timeout", "15",
+            "-t", "5",
+            "--open-timeout", "5",
+            "--read-timeout", "10",
             target.url,
             "--log-brief", output_file,
         ]
