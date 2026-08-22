@@ -85,7 +85,9 @@ class RealExecutionBackend(ExecutionBackend):
         self.console.print("  [OK] Unclassified intelligence filtered")
         self.console.print("  [>] ForgeIntel: verifying software versions against NVD")
         verified = self.vulnerability_intel.enrich(final_target)
-        if verified:
+        if self.vulnerability_intel.lookup_failed:
+            self.console.print("  [WARN] ForgeIntel: NVD lookup unavailable for at least one version; no unverified CVEs were reported")
+        elif verified:
             self.console.print(f"  [OK] ForgeIntel: {verified} verified vulnerability match(es)")
         else:
             self.console.print("  [OK] ForgeIntel: no verified vulnerable CPE matches")
@@ -139,16 +141,14 @@ class RealExecutionBackend(ExecutionBackend):
         web_by_port = {(t.ip, t.port): t for t in web_targets}
         for host in analyzed_target.hosts.values():
             for port in sorted(host.ports, key=lambda p: (p.number, p.protocol)):
-                if port.state != "open":
-                    continue
+                if port.state != "open": continue
                 service = port.service.name if port.service else "unknown"
                 product = port.service.product if port.service else ""
                 key = (host.ip, port.number)
                 if key in web_by_port:
                     target = web_by_port[key]
                     route = "ForgeProbe -> ForgeTech -> ForgeDiscover"
-                    if target.scheme == "https":
-                        route += " -> ForgeTLS"
+                    if target.scheme == "https": route += " -> ForgeTLS"
                     self.console.print(f"  {port.number}/{port.protocol} {service:<10} -> {route}")
                 else:
                     detail = f" ({product})" if product else ""
@@ -166,8 +166,7 @@ class RealExecutionBackend(ExecutionBackend):
             for endpoint in host.web_endpoints:
                 if endpoint.url.rstrip("/") == web_target.url.rstrip("/"):
                     for tech in endpoint.technologies:
-                        if tech.name.lower() in ignored:
-                            continue
+                        if tech.name.lower() in ignored: continue
                         technologies.append(tech.name)
                         if tech.version: technologies.append(tech.version)
         return sorted(set(technologies)), sorted(set(services))
@@ -177,13 +176,11 @@ class RealExecutionBackend(ExecutionBackend):
         targets = []
         for host in analyzed_target.hosts.values():
             for port in host.ports:
-                if port.state != "open":
-                    continue
+                if port.state != "open": continue
                 service_name = (port.service.name if port.service else "").lower()
                 product = (port.service.product if port.service else "").lower()
                 is_web = "http" in service_name or "http" in product or "www" in service_name or port.number in {80,443,8000,8008,8080,8081,8088,8888,8443,9443}
-                if not is_web:
-                    continue
+                if not is_web: continue
                 https = port.number in {443,8443,9443} or "https" in service_name or "ssl" in service_name or "https" in product or "ssl" in product
                 scheme = "https" if https else "http"
                 url = f"{scheme}://{host.ip}:{port.number}"
