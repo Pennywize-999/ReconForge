@@ -132,9 +132,31 @@ class RealExecutionBackend(ExecutionBackend):
             self.console.print(f"  [OK] {label}: completed")
         elif result.timed_out:
             self.console.print(f"  [TIMEOUT] {label}: unresolved")
+        elif tp.tool == "dns_lookup" and self._dns_no_record(result):
+            # A missing PTR/A record is a normal reconnaissance result, not a tool failure.
+            self.console.print(f"  [INFO] {label}: no DNS record")
         else:
             self.console.print(f"  [WARN] {label}: failed, continuing")
         return result
+
+    @staticmethod
+    def _dns_no_record(result) -> bool:
+        text = f"{result.stdout}\n{result.stderr}".lower()
+        no_record_markers = (
+            "nxdomain",
+            "host not found",
+            "not found:",
+            "no such host",
+            "domain name not found",
+        )
+        resolver_error_markers = (
+            "servfail",
+            "connection timed out",
+            "timed out",
+            "no servers could be reached",
+            "connection refused",
+        )
+        return any(marker in text for marker in no_record_markers) and not any(marker in text for marker in resolver_error_markers)
 
     def _show_service_routing(self, analyzed_target, web_targets):
         self.console.print("\nSERVICE-AWARE ROUTING")
