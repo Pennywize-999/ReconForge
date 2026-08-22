@@ -59,9 +59,7 @@ class RealExecutionBackend(ExecutionBackend):
         self._header(plan)
         self._phase("PHASE 1 / 5", "DISCOVERY")
         if self.dns_adapter.supports_target(plan.target):
-            dns_result = self._run_plan(self.dns_adapter.build_plan(plan.target, plan.output_directory), plan.target.input, results)
-            if dns_result is not None and not dns_result.success and not self._dns_no_record(dns_result):
-                self.console.print("  [WARN] ForgeDNS: resolver/tool error, continuing")
+            self._run_plan(self.dns_adapter.build_plan(plan.target, plan.output_directory), plan.target.input, results)
         if plan.target.target_type == "ip":
             tp = NmapAdapter().build_plan(plan.target, plan.output_directory, mode=plan.mode)
             result = self._run_plan(tp, plan.target.input, results)
@@ -126,10 +124,9 @@ class RealExecutionBackend(ExecutionBackend):
             results.append(self._create_skipped(tp.tool, target, tp.arguments, "Executable not found"))
             return results[-1]
         label = DISPLAY_NAMES.get(tp.tool, tp.tool)
-        # Avoid Rich Live/spinner rendering here. Some terminal/VM combinations
-        # can leave a live region looking frozen until another key is pressed.
-        # External tools are still executed synchronously, with their normal
-        # configured timeout enforced by ToolExecutor.
+        # Do not use Rich Live/spinners for external processes. On some
+        # terminal/VM combinations a live region can appear frozen until a key
+        # is pressed even though the subprocess is simply running.
         self.console.print(f"  [>] {label}: running")
         result = self.executor.execute(tp)
         results.append(result)
@@ -146,16 +143,6 @@ class RealExecutionBackend(ExecutionBackend):
     @staticmethod
     def _dns_no_record(result) -> bool:
         text = f"{result.stdout}\n{result.stderr}".lower()
-        no_record_markers = (
-            "nxdomain",
-            "nxdomain)",
-            "host not found",
-            "not found:",
-            "no such host",
-            "domain name not found",
-            "name or service not known",
-            "3(nxdomain)",
-        )
         resolver_error_markers = (
             "servfail",
             "connection timed out",
@@ -163,8 +150,20 @@ class RealExecutionBackend(ExecutionBackend):
             "no servers could be reached",
             "connection refused",
             "temporary failure in name resolution",
+            "network is unreachable",
         )
-        return any(marker in text for marker in no_record_markers) and not any(marker in text for marker in resolver_error_markers)
+        if any(marker in text for marker in resolver_error_markers):
+            return False
+        no_record_markers = (
+            "nxdomain",
+            "host not found",
+            "not found:",
+            "no such host",
+            "domain name not found",
+            "name or service not known",
+            "3(nxdomain)",
+        )
+        return any(marker in text for marker in no_record_markers) or result.return_code not in (None, 0) and not text.strip()
 
     def _show_service_routing(self, analyzed_target, web_targets):
         self.console.print("\nSERVICE-AWARE ROUTING")
