@@ -16,7 +16,6 @@ class NmapAdapter(ToolAdapter):
         return "NmapXMLParser"
 
     def supports_target(self, target: ReconTarget) -> bool:
-        # Nmap is primarily for IP/Hostname, but we can extract it from URL.
         return target.ip is not None or target.hostname is not None
 
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> ToolExecutionPlan:
@@ -24,14 +23,17 @@ class NmapAdapter(ToolAdapter):
         mode = str(kwargs.get("mode", target.mode)).lower()
         specific_port = target.port is not None
 
-        # STANDARD is the complete first-level discovery pass. LOW-IMPACT keeps
-        # the safer top-port profile while preserving service/version detection.
+        # URL targets are already scoped to a specific service port.
         if specific_port:
-            args = ["-sV", "-sC", "-oX", output_file, "-p", str(target.port)]
+            args = ["-sS", "-sC", "-sV", "-oX", output_file, "-p", str(target.port)]
         elif "low-impact" in mode or "low impact" in mode:
-            args = ["-sV", "-sC", "--top-ports", "1000", "-oX", output_file]
+            args = ["-sS", "-sC", "-sV", "--top-ports", "1000", "-oX", output_file]
         else:
-            args = ["-A", "-p-", "-oX", output_file]
+            # STANDARD is the complete Nmap discovery pass requested by the
+            # user. The flags are intentionally explicit in the execution log.
+            # -A also enables OS detection, version detection, default scripts,
+            # and traceroute, so -sC/-sV/-O are explicit for plan visibility.
+            args = ["-sS", "-sC", "-sV", "-O", "-A", "-p-", "-oX", output_file]
 
         args.append(target.ip if target.ip else target.hostname)
 
