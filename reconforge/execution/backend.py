@@ -9,35 +9,18 @@ from reconforge.tools.adapters.gobuster import GobusterAdapter
 from reconforge.tools.adapters.whatweb import WhatWebAdapter
 from reconforge.tools.adapters.dns import DNSAdapter
 from rich.console import Console
-from rich.panel import Panel
 
-
-DISPLAY_NAMES = {
-    "nmap": "ForgeScan",
-    "dns_lookup": "ForgeDNS",
-    "http_collector": "ForgeProbe",
-    "whatweb": "ForgeTech",
-    "gobuster": "ForgeDiscover",
-    "dirb": "ForgeDiscover",
-    "tls_collector": "ForgeTLS",
-}
-
+DISPLAY_NAMES = {"nmap":"ForgeScan","dns_lookup":"ForgeDNS","http_collector":"ForgeProbe","whatweb":"ForgeTech","gobuster":"ForgeDiscover","dirb":"ForgeDiscover","tls_collector":"ForgeTLS"}
 
 class ExecutionBackend(ABC):
     @abstractmethod
     def execute(self, plan: ReconPlan):
         pass
 
-
 class PlanningOnlyBackend(ExecutionBackend):
     def __init__(self):
         self.console = Console()
         self.registry = ToolRegistry()
-        from reconforge.tools.adapters.dirb import DirbAdapter
-        from reconforge.tools.adapters.http_collector import HttpCollectorAdapter
-        from reconforge.tools.adapters.tls_collector import TlsCollectorAdapter
-        self.web_adapters = [HttpCollectorAdapter(), WhatWebAdapter(), GobusterAdapter(), DirbAdapter(), TlsCollectorAdapter()]
-
     def execute(self, plan: ReconPlan):
         self.console.print("+" + "-" * 62 + "+")
         self.console.print("|" + "RECONFORGE PLAN".center(62) + "|")
@@ -50,7 +33,6 @@ class PlanningOnlyBackend(ExecutionBackend):
             self.console.print(f"  [OK] {module}")
         self.console.print("\n[dim]Planning only. No external tools were executed.[/dim]")
 
-
 class RealExecutionBackend(ExecutionBackend):
     def __init__(self):
         from reconforge.tools.adapters.dirb import DirbAdapter
@@ -58,11 +40,12 @@ class RealExecutionBackend(ExecutionBackend):
         from reconforge.tools.adapters.tls_collector import TlsCollectorAdapter
         from reconforge.execution.executor import ToolExecutor
         from reconforge.core.analyzer import Analyzer
-
+        from reconforge.core.vulnerability_intel import VulnerabilityIntel
         self.console = Console()
         self.registry = ToolRegistry()
         self.executor = ToolExecutor()
         self.analyzer = Analyzer()
+        self.vulnerability_intel = VulnerabilityIntel()
         self.dns_adapter = DNSAdapter()
         self.http_adapters = [HttpCollectorAdapter(), WhatWebAdapter()]
         self.discovery_adapters = [GobusterAdapter(), DirbAdapter()]
@@ -74,15 +57,11 @@ class RealExecutionBackend(ExecutionBackend):
         os.makedirs(plan.output_directory, exist_ok=True)
         results = []
         self._header(plan)
-
         self._phase("PHASE 1 / 5", "DISCOVERY")
         if self.dns_adapter.supports_target(plan.target):
-            dns_plan = self.dns_adapter.build_plan(plan.target, plan.output_directory)
-            self._run_plan(dns_plan, plan.target.input, results)
-
+            self._run_plan(self.dns_adapter.build_plan(plan.target, plan.output_directory), plan.target.input, results)
         if plan.target.target_type == "ip":
-            nmap_adapter = NmapAdapter()
-            tp = nmap_adapter.build_plan(plan.target, plan.output_directory, mode=plan.mode)
+            tp = NmapAdapter().build_plan(plan.target, plan.output_directory, mode=plan.mode)
             result = self._run_plan(tp, plan.target.input, results)
             if result is None:
                 return None
@@ -91,36 +70,34 @@ class RealExecutionBackend(ExecutionBackend):
             self._show_service_routing(analyzed_target, web_targets)
         else:
             web_targets = [plan.target]
-            analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
-
         if not web_targets:
             self.console.print("  [INFO] No HTTP/HTTPS services discovered.")
-
         self._phase("PHASE 2 / 5", "SERVICE-AWARE ENUMERATION")
         for w_target in web_targets:
             self._console_target(w_target)
             self._run_web_intelligence(w_target, plan, results)
-
         self._phase("PHASE 3 / 5", "CONTENT DISCOVERY")
         self.console.print("  [OK] Service-specific content discovery completed")
-
         final_target = self.analyzer.analyze_directory(plan.output_directory)
         self._phase("PHASE 4 / 5", "CORRELATION")
         self.console.print("  [OK] ForgeCore normalization")
         self.console.print("  [OK] Duplicate findings merged")
         self.console.print("  [OK] Unclassified intelligence filtered")
-
+        self.console.print("  [>] ForgeIntel: verifying software versions against NVD")
+        verified = self.vulnerability_intel.enrich(final_target)
+        if verified:
+            self.console.print(f"  [OK] ForgeIntel: {verified} verified vulnerability match(es)")
+        else:
+            self.console.print("  [OK] ForgeIntel: no verified vulnerable CPE matches")
         self._phase("PHASE 5 / 5", "REPORT GENERATION")
         return final_target
 
     def _run_web_intelligence(self, target, plan, results):
         for adapter in self.http_adapters:
-            if not adapter.supports_target(target):
-                continue
-            tp = adapter.build_plan(target, plan.output_directory)
-            if tp:
-                self._run_plan(tp, target.input, results)
-
+            if adapter.supports_target(target):
+                tp = adapter.build_plan(target, plan.output_directory)
+                if tp:
+                    self._run_plan(tp, target.input, results)
         analyzed = self.analyzer.analyze_directory(plan.output_directory)
         technologies, services = self._technology_context(analyzed, target)
         self.console.print("  TECHNOLOGY INTELLIGENCE")
@@ -128,15 +105,12 @@ class RealExecutionBackend(ExecutionBackend):
             self.console.print(f"    [OK] {value}")
         if not technologies:
             self.console.print("    [INFO] No confirmed application technology matched")
-
         self.console.print(f"  DISCOVERY PROFILE: {target.discovery_profile}")
         for adapter in self.discovery_adapters:
-            if not adapter.supports_target(target):
-                continue
-            tp = adapter.build_plan(target, plan.output_directory, discovery_profile=target.discovery_profile, technologies=technologies, services=services)
-            if tp:
-                self._run_plan(tp, target.input, results)
-
+            if adapter.supports_target(target):
+                tp = adapter.build_plan(target, plan.output_directory, discovery_profile=target.discovery_profile, technologies=technologies, services=services)
+                if tp:
+                    self._run_plan(tp, target.input, results)
         if target.scheme == "https":
             tp = self.tls_adapter.build_plan(target, plan.output_directory)
             if tp:
@@ -147,7 +121,6 @@ class RealExecutionBackend(ExecutionBackend):
             self.console.print(f"  [SKIP] {DISPLAY_NAMES.get(tp.tool, tp.tool)}: executable not found")
             results.append(self._create_skipped(tp.tool, target, tp.arguments, "Executable not found"))
             return results[-1]
-
         label = DISPLAY_NAMES.get(tp.tool, tp.tool)
         self.console.print(f"  [>] {label}: running")
         with self.console.status(f"  [bold cyan]Forge activity: {label}[/bold cyan]", spinner="dots"):
@@ -208,17 +181,14 @@ class RealExecutionBackend(ExecutionBackend):
                     continue
                 service_name = (port.service.name if port.service else "").lower()
                 product = (port.service.product if port.service else "").lower()
-                is_web = "http" in service_name or "http" in product or "www" in service_name or port.number in {80, 443, 8000, 8008, 8080, 8081, 8088, 8888, 8443, 9443}
+                is_web = "http" in service_name or "http" in product or "www" in service_name or port.number in {80,443,8000,8008,8080,8081,8088,8888,8443,9443}
                 if not is_web:
                     continue
-                https = port.number in {443, 8443, 9443} or "https" in service_name or "ssl" in service_name or "https" in product or "ssl" in product
+                https = port.number in {443,8443,9443} or "https" in service_name or "ssl" in service_name or "https" in product or "ssl" in product
                 scheme = "https" if https else "http"
                 url = f"{scheme}://{host.ip}:{port.number}"
                 targets.append(ReconTarget(input=url, target_type="url", ip=host.ip, scheme=scheme, port=port.number, url=url, mode=mode, source="nmap_service_routing", discovery_profile=discovery_profile))
-        unique = {}
-        for target in targets:
-            unique[target.url] = target
-        return list(unique.values())
+        return list({target.url: target for target in targets}.values())
 
     def _header(self, plan):
         target = plan.target.url or plan.target.input
