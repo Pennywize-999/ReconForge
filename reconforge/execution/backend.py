@@ -39,7 +39,9 @@ class PlanningOnlyBackend(ExecutionBackend):
         self.web_adapters = [HttpCollectorAdapter(), WhatWebAdapter(), GobusterAdapter(), DirbAdapter(), TlsCollectorAdapter()]
 
     def execute(self, plan: ReconPlan):
-        self.console.print(Panel("RECONFORGE PLAN", style="bold cyan", expand=False))
+        self.console.print("+" + "-" * 62 + "+")
+        self.console.print("|" + "RECONFORGE PLAN".center(62) + "|")
+        self.console.print("+" + "-" * 62 + "+")
         self.console.print(f"Target: {plan.target.url or plan.target.input}")
         self.console.print(f"Mode: {plan.mode}")
         self.console.print(f"Profile: {plan.target.discovery_profile}")
@@ -148,8 +150,7 @@ class RealExecutionBackend(ExecutionBackend):
 
         label = DISPLAY_NAMES.get(tp.tool, tp.tool)
         self.console.print(f"  [>] {label}: running")
-        # Rich Status is real process feedback, not fabricated scan progress.
-        with self.console.status(f"  [bold cyan]⠋ {label}[/bold cyan] running", spinner="dots"):
+        with self.console.status(f"  [bold cyan]Forge activity: {label}[/bold cyan]", spinner="dots"):
             result = self.executor.execute(tp)
         results.append(result)
         if result.success:
@@ -221,10 +222,11 @@ class RealExecutionBackend(ExecutionBackend):
 
     def _header(self, plan):
         target = plan.target.url or plan.target.input
-        self.console.print(Panel(
-            f"[bold cyan]RECONFORGE[/bold cyan]\n[white]FIRST-LEVEL RECONNAISSANCE ENGINE[/white]",
-            style="cyan", expand=False, width=64
-        ))
+        width = 62
+        self.console.print("+" + "=" * width + "+")
+        self.console.print("|" + "RECONFORGE".center(width) + "|")
+        self.console.print("|" + "FIRST-LEVEL RECONNAISSANCE ENGINE".center(width) + "|")
+        self.console.print("+" + "=" * width + "+")
         self.console.print(f"TARGET   {target}")
         self.console.print(f"MODE     {plan.mode}")
         self.console.print(f"PROFILE  {plan.target.discovery_profile}\n")
