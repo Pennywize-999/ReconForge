@@ -4,6 +4,7 @@ from typing import Any, Optional
 from reconforge.core.models import ReconTarget
 from reconforge.tools.models import ToolExecutionPlan
 from reconforge.tools.adapters.base import ToolAdapter
+from reconforge.core.config import load_config
 
 
 class DirbAdapter(ToolAdapter):
@@ -19,23 +20,32 @@ class DirbAdapter(ToolAdapter):
         return target.scheme in ["http", "https"]
 
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> Optional[ToolExecutionPlan]:
-        from reconforge.core.config import load_config
-        from reconforge.core.discovery import DiscoveryEngine
-
         config = load_config()
         profile = kwargs.get("discovery_profile") or getattr(target, "discovery_profile", "COMMON")
         technologies = kwargs.get("technologies", [])
         services = kwargs.get("services", [])
 
+        try:
+            from reconforge.core.discovery import DiscoveryEngine
+            discovery = DiscoveryEngine().build(
+                profile,
+                technologies=technologies,
+                services=services,
+            )
+        except Exception:
+            discovery = None
+
         generated = os.path.join(output_dir, f"reconforge_{profile.lower()}_wordlist.txt")
-        discovery = DiscoveryEngine().build(profile, technologies=technologies, services=services)
-        os.makedirs(output_dir, exist_ok=True)
-        with open(generated, "w", encoding="utf-8") as handle:
-            for candidate in discovery.candidates:
-                handle.write(candidate.path + "\n")
+        if discovery and discovery.candidates:
+            os.makedirs(output_dir, exist_ok=True)
+            with open(generated, "w", encoding="utf-8") as handle:
+                for candidate in discovery.candidates:
+                    handle.write(candidate.path + "\n")
 
         fallback = config.default_wordlists + ["/usr/share/wordlists/dirb/common.txt"]
-        wordlist = generated if discovery.candidates else next((w for w in fallback if os.path.exists(w)), None)
+        wordlist = generated if discovery and discovery.candidates else next(
+            (w for w in fallback if os.path.exists(w)), None
+        )
         if not wordlist:
             return None
 
@@ -46,5 +56,5 @@ class DirbAdapter(ToolAdapter):
             tool=self.tool_name,
             target=target.input,
             arguments=args,
-            output_file=output_file
+            output_file=output_file,
         )
