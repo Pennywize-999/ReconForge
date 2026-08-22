@@ -28,7 +28,10 @@ dev = [
 ]
 
 [tool.setuptools.package-data]
-reconforge = ["templates/*.html"]
+reconforge = ["templates/*.html", "wordlists/*.txt", "wordlists/categories/*.txt"]
+
+[tool.setuptools.packages.find]
+include = ["reconforge*"]
 
 [project.scripts]
 reconforge = "reconforge.cli:main"
