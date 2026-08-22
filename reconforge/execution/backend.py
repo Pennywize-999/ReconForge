@@ -59,7 +59,9 @@ class RealExecutionBackend(ExecutionBackend):
         self._header(plan)
         self._phase("PHASE 1 / 5", "DISCOVERY")
         if self.dns_adapter.supports_target(plan.target):
-            self._run_plan(self.dns_adapter.build_plan(plan.target, plan.output_directory), plan.target.input, results)
+            dns_result = self._run_plan(self.dns_adapter.build_plan(plan.target, plan.output_directory), plan.target.input, results)
+            if dns_result is not None and not dns_result.success and not self._dns_no_record(dns_result):
+                self.console.print("  [WARN] ForgeDNS: resolver/tool error, continuing")
         if plan.target.target_type == "ip":
             tp = NmapAdapter().build_plan(plan.target, plan.output_directory, mode=plan.mode)
             result = self._run_plan(tp, plan.target.input, results)
@@ -124,16 +126,18 @@ class RealExecutionBackend(ExecutionBackend):
             results.append(self._create_skipped(tp.tool, target, tp.arguments, "Executable not found"))
             return results[-1]
         label = DISPLAY_NAMES.get(tp.tool, tp.tool)
+        # Avoid Rich Live/spinner rendering here. Some terminal/VM combinations
+        # can leave a live region looking frozen until another key is pressed.
+        # External tools are still executed synchronously, with their normal
+        # configured timeout enforced by ToolExecutor.
         self.console.print(f"  [>] {label}: running")
-        with self.console.status(f"  [bold cyan]Forge activity: {label}[/bold cyan]", spinner="dots"):
-            result = self.executor.execute(tp)
+        result = self.executor.execute(tp)
         results.append(result)
         if result.success:
             self.console.print(f"  [OK] {label}: completed")
         elif result.timed_out:
             self.console.print(f"  [TIMEOUT] {label}: unresolved")
         elif tp.tool == "dns_lookup" and self._dns_no_record(result):
-            # A missing PTR/A record is a normal reconnaissance result, not a tool failure.
             self.console.print(f"  [INFO] {label}: no DNS record")
         else:
             self.console.print(f"  [WARN] {label}: failed, continuing")
@@ -144,10 +148,13 @@ class RealExecutionBackend(ExecutionBackend):
         text = f"{result.stdout}\n{result.stderr}".lower()
         no_record_markers = (
             "nxdomain",
+            "nxdomain)",
             "host not found",
             "not found:",
             "no such host",
             "domain name not found",
+            "name or service not known",
+            "3(nxdomain)",
         )
         resolver_error_markers = (
             "servfail",
@@ -155,6 +162,7 @@ class RealExecutionBackend(ExecutionBackend):
             "timed out",
             "no servers could be reached",
             "connection refused",
+            "temporary failure in name resolution",
         )
         return any(marker in text for marker in no_record_markers) and not any(marker in text for marker in resolver_error_markers)
 
@@ -166,6 +174,7 @@ class RealExecutionBackend(ExecutionBackend):
                 if port.state != "open": continue
                 service = port.service.name if port.service else "unknown"
                 product = port.service.product if port.service else ""
+                version = port.service.version if port.service else ""
                 key = (host.ip, port.number)
                 if key in web_by_port:
                     target = web_by_port[key]
@@ -173,7 +182,8 @@ class RealExecutionBackend(ExecutionBackend):
                     if target.scheme == "https": route += " -> ForgeTLS"
                     self.console.print(f"  {port.number}/{port.protocol} {service:<10} -> {route}")
                 else:
-                    detail = f" ({product})" if product else ""
+                    detail = " ".join(x for x in (product, version) if x)
+                    detail = f" ({detail})" if detail else ""
                     self.console.print(f"  {port.number}/{port.protocol} {service}{detail} -> inventory only")
 
     @staticmethod
