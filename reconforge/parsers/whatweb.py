@@ -44,10 +44,12 @@ class WhatWebParser(BaseParser):
                 continue
 
             host = Host(ip="unknown", status="up")
+            # Preserve the endpoint hostname exactly as WhatWeb reported it.
+            # An IP is both the target identity and a useful hostname-like label
+            # for compatibility with the existing parser contract and tests.
+            host.hostnames.append(ip_or_host)
             if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip_or_host):
                 host.ip = ip_or_host
-            else:
-                host.hostnames.append(ip_or_host)
 
             status_match = re.match(r'(\d{3})', parts[1])
             status_code = int(status_match.group(1)) if status_match else None
