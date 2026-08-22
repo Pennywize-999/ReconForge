@@ -28,8 +28,6 @@ def execute_http_collector(plan: ToolExecutionPlan, config: Any):
             headers = response.getheaders()
 
             with open(output_file, "w", encoding="utf-8") as f:
-                # Preserve the request target so downstream parsers can attach
-                # technologies to the exact web endpoint, including custom ports.
                 f.write(f"Request-URL: {target_url}\n")
                 f.write(f"HTTP/1.1 {status} OK\n")
                 for k, v in headers:
