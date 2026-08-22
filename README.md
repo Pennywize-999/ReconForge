@@ -1,85 +1,65 @@
 # ReconForge
 
-**ReconForge v0.2.0** is an authorized reconnaissance and security-assessment framework for Kali Linux and other Unix-like environments. It combines network discovery, DNS intelligence, service-aware enumeration, web technology detection, content discovery, evidence normalization, vulnerability intelligence, and structured reporting into one workflow.
+**ReconForge v0.2.0** is a first-level reconnaissance and security-assessment framework for Kali Linux and Unix-like environments. It combines network discovery, DNS intelligence, service-aware enumeration, web technology detection, content discovery, vulnerability intelligence, correlation, and clean reporting into one workflow.
 
-> **Use only on systems you own or have explicit permission to assess.** ReconForge is designed for authorized penetration testing, CTFs, labs, and security research.
-
----
+> **Authorized use only.** Use ReconForge only on systems you own or have explicit permission to assess, including authorized penetration tests, CTFs, labs, and security research.
 
 ## What ReconForge Does
 
-ReconForge takes an IP address, hostname, or URL and turns reconnaissance data into a structured assessment.
+Give ReconForge an IP address, hostname, or URL. It discovers the target, identifies services, routes service-specific checks automatically, correlates the results, and produces one organized report instead of forcing you to read several separate tool outputs.
 
-The workflow is designed around five stages:
+The workflow is:
 
-1. **Discovery**: identify reachable hosts, ports, services, operating-system hints, and DNS information.
-2. **Service-aware routing**: determine which protocol-specific modules are useful for each discovered service.
-3. **Enumeration**: inspect HTTP/HTTPS services, technologies, TLS information, and discover interesting web paths.
-4. **Correlation**: normalize results, remove duplicates, preserve useful unclassified information, and connect evidence from multiple sources.
-5. **Reporting**: present clean host, service, URL, finding, vulnerability, and intelligence results.
+1. **Discovery**: hosts, ports, services, versions, OS hints, CPE data, and DNS information.
+2. **Service-aware routing**: select the appropriate modules from what was actually discovered.
+3. **Enumeration**: HTTP/HTTPS probing, technology fingerprinting, TLS intelligence, and content discovery.
+4. **Correlation**: normalize results and merge duplicates while preserving useful intelligence.
+5. **Reporting**: produce clean host, service, URL, finding, vulnerability, and intelligence sections.
 
-ReconForge does not intentionally hide unsuccessful or unusual results. When information cannot be confidently classified, it can be retained as unclassified intelligence instead of silently discarded.
+ReconForge does not treat every unusual result as a vulnerability. Unverified information is kept separate so it can be investigated without creating false positives.
 
----
+## ReconForge Modules
 
-# ReconForge Modules
-
-ReconForge gives its internal modules clear names so users can understand the role of each stage without needing to know the underlying command immediately.
-
-| ReconForge Module | Purpose | Underlying capability |
+| Module | Purpose | Capability |
 |---|---|---|
-| **ForgeDNS** | DNS and reverse-DNS intelligence | DNS lookup / `host` |
-| **ForgeScan** | Network discovery, ports, services, OS hints and CPE data | Nmap |
+| **ForgeDNS** | DNS and reverse-DNS intelligence | DNS/`host` lookup |
+| **ForgeScan** | Port, service, version, OS and CPE discovery | Nmap |
 | **ForgeProbe** | HTTP response and header collection | Internal HTTP collector |
-| **ForgeTech** | Web technology and server fingerprinting | WhatWeb |
-| **ForgeDiscover** | Web content and path discovery | Gobuster, Dirb and configured discovery modules |
-| **ForgeTLS** | TLS and certificate intelligence | Internal TLS collector |
-| **ForgeCore** | Normalize, correlate and deduplicate reconnaissance data | ReconForge core |
-| **ForgeIntel** | Version-aware vulnerability intelligence and correlation | ReconForge vulnerability intelligence |
-| **ForgeReport** | Produce the final structured terminal/HTML report | ReconForge reporters |
+| **ForgeTech** | Web technology fingerprinting | WhatWeb |
+| **ForgeDiscover** | Web path and file discovery | Gobuster, Dirb and configured discovery modules |
+| **ForgeTLS** | HTTPS/TLS and certificate intelligence | Internal TLS collector |
+| **ForgeCore** | Normalize, correlate and deduplicate results | ReconForge core |
+| **ForgeIntel** | Version-aware vulnerability correlation | ReconForge vulnerability intelligence |
+| **ForgeReport** | Clean terminal and HTML reporting | ReconForge reporters |
 
-These names describe ReconForge's role in the workflow. They do **not** claim that the underlying third-party projects have been rewritten or that their upstream licenses have changed.
-
----
+These are ReconForge's internal module names. They do not claim that the underlying third-party projects have been rewritten.
 
 ## ForgeDNS
 
-**ForgeDNS** performs DNS-oriented discovery when a hostname or URL provides a DNS-relevant target.
-
-It can collect information such as:
+Collects DNS-related information when applicable:
 
 - Forward DNS resolution
-- Reverse DNS information where available
+- Reverse DNS information
 - Hostname/IP relationships
-- DNS lookup errors and unavailable records
+- DNS errors and unavailable records
 
-DNS results are fed into the same normalized data model as the rest of the reconnaissance pipeline.
-
-If DNS is unavailable or not applicable, ReconForge records the condition and continues with other discovery modules where possible.
-
----
+If DNS is unavailable or not applicable, the rest of the reconnaissance workflow can continue.
 
 ## ForgeScan
 
-**ForgeScan** is the primary network discovery stage.
+The primary network discovery stage. It collects information such as:
 
-It is responsible for collecting information such as:
-
-- Open TCP ports
-- Service names
-- Service products
-- Service versions
-- Protocol information
+- Open ports and states
+- Protocols and services
+- Product names and versions
 - Host status
 - MAC address when available
 - Hostnames
-- OS guesses
+- OS detection hints
 - CPE information when available
-- Network distance and related Nmap discovery information
+- Network distance and related discovery information
 
-ReconForge uses the discovered service information to decide what should happen next.
-
-For example:
+ForgeScan drives service-aware routing. For example:
 
 ```text
 80/tcp  open  http  Apache httpd 2.4.29
@@ -89,58 +69,32 @@ For example:
           +--> ForgeDiscover
 ```
 
-This is **service-aware routing**. ReconForge does not blindly run every web module against every target.
-
----
+ReconForge does not blindly run web enumeration against services that are not identified as web services.
 
 ## ForgeProbe
 
-**ForgeProbe** collects HTTP-level information from discovered HTTP/HTTPS services.
+Collects HTTP-level information including status codes, headers, redirects, content size, server information, and endpoint observations.
 
-Typical information includes:
-
-- HTTP status codes
-- Response headers
-- Content length
-- Redirects
-- Server headers
-- Interesting HTTP responses
-- Endpoint observations
-
-The results are normalized into ReconForge web endpoint and finding objects.
-
----
+Useful HTTP responses are retained even when they are not `200`. For example, `401`, `403`, `405`, `429`, redirects, and selected server errors can provide useful reconnaissance information.
 
 ## ForgeTech
 
-**ForgeTech** performs web technology fingerprinting using the WhatWeb capability available on the system.
-
-It can identify information such as:
+Uses the available WhatWeb capability to identify web technologies such as:
 
 - Web server software
-- Server versions when detected
+- Detected versions
 - Frameworks
 - CMS indicators
-- Web technologies
-- Other fingerprinting plugins reported by WhatWeb
-
-ReconForge separates confirmed technology information from generic metadata so the final report remains readable.
-
----
+- Technology fingerprints
+- Other WhatWeb plugin results
 
 ## ForgeDiscover
 
-**ForgeDiscover** performs web content discovery against applicable HTTP/HTTPS services.
+Performs web content discovery against applicable HTTP/HTTPS services.
 
-Depending on the selected discovery profile and installed dependencies, ReconForge can use directory/file enumeration capabilities such as:
+Depending on the selected profile and installed tools, ReconForge can use capabilities such as Gobuster and Dirb. Results from different sources are normalized so the final report does not repeat the same URL several times.
 
-- Gobuster
-- Dirb
-- Additional configured content-discovery tools
-
-The important difference is that ReconForge **normalizes the results** instead of presenting several raw tool outputs separately.
-
-For example, these observations can become one clean table:
+The final report uses full URLs, for example:
 
 | URL | Status | Significance |
 |---|---:|---|
@@ -149,97 +103,43 @@ For example, these observations can become one clean table:
 | `http://target/robots.txt` | 200 | Accessible resource |
 | `http://target/server-status` | 403 | Protected resource |
 
-Unusual HTTP responses are retained rather than automatically treating every non-200 response as useless. This matters because `401`, `403`, redirects, `405`, `429`, and some server-side errors can reveal useful information during authorized testing.
-
----
-
 ## Content Discovery Profiles
 
-ReconForge includes selectable discovery profiles so the user can balance speed and coverage.
+ReconForge provides three discovery profiles:
 
 ### COMMON
 
-A practical baseline wordlist/profile for normal reconnaissance.
-
-Use this when you want useful coverage without making the scan unnecessarily large.
+Baseline coverage for normal first-level reconnaissance. Fast and practical.
 
 ### EXTENDED
 
-A broader discovery profile intended to find more application paths and files.
-
-Use this when the COMMON profile does not provide enough coverage.
+Broader path and file coverage when COMMON does not find enough useful resources.
 
 ### DEEP
 
-The most comprehensive configured content-discovery profile.
+The largest configured coverage profile. Intended when coverage is more important than scan time and the target is authorized for deeper enumeration.
 
-Use this when coverage is more important than scan time and the target is authorized for deeper enumeration.
+Wordlists are categorized instead of relying on one uncontrolled giant list. Categories can cover common paths, administration, authentication, APIs, CMS structures, WordPress paths, backup/configuration names, development/test paths, static assets, and common files/extensions.
 
-The project keeps wordlists categorized rather than relying on one enormous undifferentiated list. This allows ReconForge to expand coverage while keeping profiles understandable and maintainable.
+## ForgeTLS
 
----
+Handles HTTPS/TLS-specific collection, including certificate and TLS configuration observations when available.
 
-# Why the Wordlists Are Categorized
+## ForgeCore
 
-ReconForge's content discovery is intended to recognize common application structures, administrative paths, API paths, configuration-related files, CMS paths, backup names, and other frequently encountered resources.
+The normalization and correlation layer. It converts different tool outputs into the common ReconForge data model and merges duplicate observations.
 
-The goal is **not** to throw an arbitrary giant collection of words at every target.
+For example, if both ForgeProbe and ForgeDiscover find `robots.txt`, the final report can contain one URL rather than two duplicate entries.
 
-Instead, categories can be combined according to the selected profile. This makes the scan easier to reason about and allows future wordlist improvements without changing the scanner architecture.
+ForgeCore also preserves useful information that cannot confidently be classified.
 
-Examples of useful categories include:
+## ForgeIntel and Vulnerability Intelligence
 
-- General/common paths
-- Administrative paths
-- Authentication paths
-- API paths
-- CMS paths
-- WordPress-related paths
-- Backup/configuration filenames
-- Development/test paths
-- Static assets
-- Common files and extensions
+ForgeIntel correlates detected software with vulnerability intelligence.
 
-The project should continue to add validated, useful categories over time rather than blindly increasing wordlist size.
+ReconForge is deliberately conservative. A product name alone is not enough to report a vulnerability.
 
----
-
-# ForgeTLS
-
-**ForgeTLS** handles HTTPS/TLS-specific collection.
-
-Depending on the target and available information, it can preserve information about:
-
-- TLS certificates
-- Certificate-related findings
-- TLS configuration observations
-- Certificate names and relationships
-
-TLS findings are kept separate from normal web technology output so the final report remains organized.
-
----
-
-# ForgeCore
-
-**ForgeCore** is the normalization and correlation layer.
-
-It is responsible for turning different tool outputs into a common ReconForge model.
-
-This is important because the same resource may be discovered by multiple sources. For example, `robots.txt` could be found by both an HTTP collector and a directory enumerator.
-
-Instead of printing duplicate entries, ReconForge can correlate them into a single observation while retaining the source information internally.
-
-ForgeCore also handles unclassified intelligence. Data that does not confidently fit a known category can be retained for review instead of being silently thrown away.
-
----
-
-# ForgeIntel and Vulnerability Intelligence
-
-**ForgeIntel** handles vulnerability correlation from detected software information.
-
-ReconForge is designed to be conservative here. A product name alone is **not enough** to declare a vulnerability.
-
-The intended workflow is:
+The intended chain is:
 
 ```text
 Detected product
@@ -255,108 +155,45 @@ Affected-version applicability check
 Verified vulnerability result
 ```
 
-The report should distinguish between:
+The system distinguishes between verified matches, insufficient information, and no verified match. A CVE affecting a broad product family is not automatically reported against every installation of that product.
 
-- Confirmed vulnerability matches
-- Information that could not be verified
-- Missing version information
-- Products for which no verified match was found
+## Unclassified Intelligence
 
-This is important for avoiding false positives. A CVE affecting `Apache 2.x` in general must not automatically be reported against every Apache installation. The detected version and vulnerability applicability must be checked.
-
-When there are no verified matches, the report should clearly say that no verified vulnerable CPE matches were identified rather than inventing a vulnerability result.
-
----
-
-# Unclassified Intelligence
-
-ReconForge intentionally has a place for information that looks potentially useful but cannot yet be confidently classified.
-
-Examples can include:
+ReconForge can show potentially useful information that cannot yet be confidently classified, including:
 
 - Unknown services
 - Unknown HTTP responses
 - Unusual response codes
-- Unexpected protocol data
 - Identifiers
 - Token-like strings
 - Hash-like strings
 - Encoded-looking values
 - Application-specific text
-- Other unusual observations
+- Unexpected protocol data
 
-These entries are **not automatically vulnerabilities** and should not be treated as credentials merely because they look unusual.
+These are investigation leads, **not automatic vulnerabilities or credentials**. This is useful when a seemingly random value from a CTF or application later turns out to be important.
 
-They are presented as investigation leads with context and confidence so the tester can decide whether they matter.
+## WAF / CDN Analysis
 
-This is especially useful during CTFs and penetration tests where an apparently random string can sometimes turn out to be an application identifier, password, token, hash, or other important artifact.
+HTTP observations can be analyzed for indicators associated with WAFs, CDNs, rate limiting, `403`, `429`, and other filtering behavior. Results are presented with confidence because a single `403` does not prove that a WAF exists.
 
----
+## Final Report
 
-# WAF / CDN Analysis
-
-ReconForge can analyze collected HTTP information for indicators associated with:
-
-- WAF behavior
-- CDN indicators
-- Rate limiting
-- HTTP `403` responses
-- HTTP `429` responses
-- Other blocking or filtering signals
-
-The result is presented as an analysis with confidence rather than as an unconditional claim. A `403` by itself does not prove that a WAF exists.
-
----
-
-# Evidence and Reporting
-
-ReconForge keeps machine-readable evidence internally so results can be traced back to their originating collection stage.
-
-The user-facing terminal report is intentionally cleaner than raw tool output.
-
-The final report can contain separate sections for:
+The terminal report is organized into separate sections such as:
 
 1. Host information
 2. Open ports and services
 3. Web technology
 4. TLS/certificate information
 5. WAF/CDN analysis
-6. Discovered and interesting URLs
+6. Discovered / interesting URLs
 7. Important findings
 8. Vulnerability intelligence
 9. Unclassified intelligence
 
-The **DISCOVERED / INTERESTING URLS** section is presented as a table containing the full URL, HTTP status, and significance.
+Internal execution evidence is not intended to clutter the user-facing report. The report is designed to show the information needed for reconnaissance rather than raw logs from every underlying tool.
 
-Example:
-
-```text
-DISCOVERED / INTERESTING URLS
-------------------------------------------------------------
-URL                                      STATUS  SIGNIFICANCE
-http://10.0.2.10:80                         200  Accessible resource
-http://10.0.2.10:80/index.html              200  Accessible resource
-http://10.0.2.10:80/robots.txt              200  Accessible resource
-http://10.0.2.10:80/server-status            403  Protected resource
-```
-
-Full URLs are preferred over displaying only `/path`, because the protocol, host, and port are important when multiple services are being assessed.
-
----
-
-# Execution and Safety
-
-ReconForge can be used for planning, offline analysis, and active execution depending on the current project configuration and execution backend.
-
-Active execution invokes locally installed security tools. It does not magically replace those upstream tools with proprietary reimplementations. ReconForge's value is the orchestration, service-aware routing, parsing, normalization, correlation, wordlist profiles, vulnerability intelligence, and reporting around them.
-
-Use active execution only against authorized targets.
-
-Low-impact mode is intended to reduce request volume and behave more conservatively. It is not an anonymity or evasion feature.
-
----
-
-# Supported Tooling
+## Supported Tooling
 
 ReconForge currently integrates or recognizes capabilities including:
 
@@ -365,21 +202,13 @@ ReconForge currently integrates or recognizes capabilities including:
 - **Gobuster**: web content discovery
 - **Dirb**: web content discovery
 - **WhatWeb**: web technology fingerprinting
-- **Feroxbuster**: fast recursive content discovery when installed/configured
+- **Feroxbuster**: content discovery when installed/configured
 - **Internal HTTP collector**: HTTP information collection
 - **Internal TLS collector**: TLS information collection
 
-ReconForge checks whether external executables are installed before attempting to use them.
+ReconForge checks for required external executables before attempting to use them.
 
-Check available tooling with:
-
-```bash
-reconforge tools
-```
-
----
-
-# Installation
+## Installation
 
 On Kali Linux:
 
@@ -390,18 +219,15 @@ source .venv/bin/activate
 python -m pip install -e .
 ```
 
-For development and testing:
+Then start ReconForge:
 
 ```bash
-python -m pip install -e ".[dev]"
-python -m pytest -q
+reconforge
 ```
 
----
+## Quick Start
 
-# Quick Start
-
-Start the interactive workflow:
+Run:
 
 ```bash
 reconforge
@@ -413,9 +239,9 @@ You will be asked for:
 2. Recon mode
 3. Content discovery profile
 
-ReconForge then determines which modules apply to the discovered services.
+ReconForge then determines which modules apply to the services it discovers.
 
-A typical HTTP workflow looks like:
+Typical flow:
 
 ```text
 Target
@@ -424,13 +250,11 @@ Target
   |
   +--> ForgeScan
           |
-          +--> 80/tcp HTTP
-                  |
-                  +--> ForgeProbe
-                  +--> ForgeTech
-                  +--> ForgeDiscover
+          +--> HTTP/HTTPS --> ForgeProbe
+          |                  ForgeTech
+          |                  ForgeDiscover
           |
-          +--> ForgeTLS for HTTPS
+          +--> HTTPS ------> ForgeTLS
           |
           +--> ForgeCore
                   |
@@ -439,117 +263,45 @@ Target
                   +--> ForgeReport
 ```
 
----
+## Offline Analysis
 
-# Offline Analysis
+ReconForge can also analyze existing reconnaissance output when the relevant analysis commands are available.
 
-ReconForge can also analyze existing reconnaissance output without performing a new scan.
+Supported evidence formats include Nmap XML, DNS output, HTTP output, SMB output, TLS output, Gobuster output, Dirb output, WhatWeb output, and generic text logs.
 
-Examples:
-
-```bash
-reconforge analyze tests/fixtures/sample.xml
-reconforge import tests/fixtures/
-```
-
-Supported evidence includes:
-
-- Nmap XML
-- DNS output
-- HTTP output
-- SMB output
-- TLS output
-- Gobuster output
-- Dirb output
-- WhatWeb output
-- Generic text logs
-
-This allows reconnaissance to be collected separately and analyzed later.
-
----
-
-# Reports
-
-Generate an HTML report where supported:
-
-```bash
-reconforge report current --format html
-```
-
-WAF/CDN analysis can be displayed with:
-
-```bash
-reconforge waf current
-```
-
----
-
-# Project Structure
+## Project Structure
 
 ```text
 ReconForge/
-├── reconforge/
-│   ├── core/          Core models, planning, analysis and vulnerability intelligence
-│   ├── execution/     Execution backends
-│   ├── parsers/       Reconnaissance output parsers
-│   ├── reporters/     Terminal and HTML reporting
-│   ├── tools/         Tool registry and adapters
-│   ├── templates/     Report templates
-│   └── wordlists/     Categorized content-discovery wordlists
-├── tests/             Automated tests and fixtures
-├── docs/              Extended documentation
-├── install.sh         Installation helper
-├── pyproject.toml     Python package configuration
-└── README.md          Project overview
+├── reconforge/          Runtime application
+│   ├── core/            Models, planning, analysis and vulnerability intelligence
+│   ├── execution/       Execution backends
+│   ├── parsers/         Reconnaissance parsers
+│   ├── reporters/       Terminal and HTML reporting
+│   ├── tools/           Tool registry and adapters
+│   ├── templates/       Report templates
+│   └── wordlists/       Categorized discovery wordlists
+├── docs/                User documentation
+├── install.sh            Installation helper
+├── pyproject.toml        Package configuration
+├── reconforge.1          Man page
+└── README.md             User documentation
 ```
 
----
+## Limitations
 
-# Development Quality
+ReconForge is a reconnaissance and analysis assistant, not a replacement for expert validation.
 
-Before submitting changes, run:
-
-```bash
-python -m pytest -q
-```
-
-Changes should not silently remove information from reconnaissance results. Parser changes, routing changes, vulnerability matching changes, and report changes should include or update tests where appropriate.
-
----
-
-# Limitations
-
-ReconForge is an orchestration and analysis framework, not a replacement for expert judgment.
-
-Important limitations include:
-
-- Tool output quality depends partly on the underlying tools and target behavior.
 - Version detection can be incomplete or inaccurate.
 - Vulnerability matching requires sufficient product/version/CPE information.
-- No vulnerability database can guarantee complete coverage.
+- Vulnerability databases do not guarantee complete coverage.
 - A detected technology does not automatically mean it is vulnerable.
 - An unusual string is not automatically a credential or secret.
-- WAF/CDN detection is probabilistic and should be treated as an indicator.
-- Deeper content discovery can increase scan time and request volume.
+- WAF/CDN detection is probabilistic.
+- Deeper content discovery increases scan time and request volume.
 
-ReconForge should therefore be used as a structured reconnaissance assistant, with findings manually validated before exploitation or reporting.
+Validate important findings before exploitation or formal reporting.
 
----
+## Responsible Use
 
-# Security and Responsible Use
-
-Only scan systems for which you have explicit authorization.
-
-For security issues in ReconForge itself, see `SECURITY.md`.
-
----
-
-# Documentation
-
-- [User Guide](docs/USER_GUIDE.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Installation](docs/INSTALLATION.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security](SECURITY.md)
-
-**License:** Not yet specified.
+Only scan systems for which you have explicit authorization. ReconForge is intended for authorized penetration testing, CTFs, labs, and security research.
