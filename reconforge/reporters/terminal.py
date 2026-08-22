@@ -11,7 +11,7 @@ class TerminalReporter:
 
     def report(self, target: Target):
         self.console.print("\n")
-        self.console.print(Panel("[bold white]RECONFORGE ANALYSIS REPORT[/bold white]", expand=False, style="blue"))
+        self.console.print(Panel("[bold white]RECONFORGE ANALYSIS REPORT[/bold white]", expand=False, style="cyan"))
         for host in target.hosts.values():
             self._print_target(host)
             self._print_services(host)
@@ -25,7 +25,7 @@ class TerminalReporter:
         self._print_evidence_section(target)
 
     def report_waf(self, target: Target):
-        self.console.print(Panel("[bold white]RECONFORGE WAF / CDN ANALYSIS[/bold white]", expand=False, style="blue"))
+        self.console.print(Panel("[bold white]RECONFORGE WAF / CDN ANALYSIS[/bold white]", expand=False, style="cyan"))
         for host in target.hosts.values():
             if host.waf_analysis:
                 self._print_waf(host)
@@ -34,46 +34,44 @@ class TerminalReporter:
         self.console.print(f"\n[bold cyan]HOST INFORMATION[/bold cyan]\n{'-' * 60}")
         self.console.print(f"Status:   {host.status}")
         self.console.print(f"IP:       {host.ip}")
-        if host.mac:
-            self.console.print(f"MAC:      {host.mac}")
-        if host.hostnames:
-            self.console.print(f"Hostname: {', '.join(host.hostnames)}")
-        if host.ipv6:
-            self.console.print(f"IPv6:     {host.ipv6}")
-        if host.os_guesses:
-            self.console.print(f"OS:       {', '.join(host.os_guesses[:3])}")
+        if host.mac: self.console.print(f"MAC:      {host.mac}")
+        if host.hostnames: self.console.print(f"Hostname: {', '.join(host.hostnames)}")
+        if host.ipv6: self.console.print(f"IPv6:     {host.ipv6}")
+        if host.os_guesses: self.console.print(f"OS:       {', '.join(host.os_guesses[:3])}")
 
     def _print_services(self, host: Host):
-        if not host.ports:
-            return
+        if not host.ports: return
         self.console.print("\n[bold cyan]OPEN PORTS / SERVICES[/bold cyan]\n" + "-" * 60)
         table = Table(box=None, pad_edge=False)
-        for col in ("PORT", "STATE", "SERVICE", "PRODUCT", "VERSION"):
-            table.add_column(col)
-        for port in host.ports:
+        for col in ("PORT", "STATE", "SERVICE", "PRODUCT", "VERSION"): table.add_column(col)
+        for port in sorted(host.ports, key=lambda p: (p.number, p.protocol)):
             service = port.service
             table.add_row(f"{port.number}/{port.protocol}", port.state, service.name if service else "unknown", service.product if service else "", service.version if service else "")
         self.console.print(table)
 
     def _print_web(self, host: Host):
-        if not host.web_endpoints:
-            return
+        if not host.web_endpoints: return
         self.console.print("\n[bold cyan]WEB TECHNOLOGY[/bold cyan]\n" + "-" * 60)
         techs = {}
         for endpoint in host.web_endpoints:
             for tech in endpoint.technologies:
+                # Metadata plugins are filtered by WhatWebParser, but keep the
+                # report defensive for older session files.
+                if tech.name.lower() in {"country", "ip", "title", "httpserver", "url"}:
+                    continue
                 value = tech.version or (tech.detected_values[0] if tech.detected_values else "")
                 techs.setdefault(tech.name, set()).add(value)
         for name, values in sorted(techs.items()):
             clean = ", ".join(v for v in values if v) or "Detected"
             self.console.print(f"{name}: {clean}")
+        if not techs:
+            self.console.print("No confirmed application technologies detected.")
 
         self.console.print("\n[bold cyan]DISCOVERED / INTERESTING URLS[/bold cyan]\n" + "-" * 60)
         seen = set()
         for endpoint in sorted(host.web_endpoints, key=lambda e: (e.url, e.status_code or 0)):
-            key = (endpoint.url, endpoint.status_code)
-            if key in seen:
-                continue
+            key = (endpoint.url.rstrip("/"), endpoint.status_code)
+            if key in seen: continue
             seen.add(key)
             status = endpoint.status_code if endpoint.status_code is not None else "UNKNOWN"
             significance = self._url_significance(endpoint.status_code, endpoint.category)
@@ -129,14 +127,16 @@ class TerminalReporter:
         self.console.print("\n[bold magenta]UNCLASSIFIED INTELLIGENCE[/bold magenta]\n" + "-" * 60)
         table = Table(box=None, pad_edge=False)
         for col in ("TYPE", "VALUE", "CONTEXT", "POTENTIAL RELEVANCE", "CONFIDENCE"): table.add_column(col)
-        for item in host.unclassified: table.add_row(item.kind, item.value, item.context[:100], item.potential_relevance, item.confidence.value)
+        for item in host.unclassified:
+            table.add_row(item.kind, item.value, item.context[:100], item.potential_relevance, item.confidence.value)
         self.console.print(table)
 
     def _print_execution(self, target: Target):
         if not target.execution: return
         self.console.print("\n[bold cyan]EXECUTION SUMMARY[/bold cyan]\n" + "-" * 60)
+        display_names = {"nmap":"ForgeScan", "http_collector":"ForgeProbe", "whatweb":"ForgeTech", "gobuster":"ForgeDiscover", "dirb":"ForgeDiscover", "tls_collector":"ForgeTLS", "dns_lookup":"ForgeDNS"}
         for info in target.execution:
-            tool = info.get("tool", "unknown")
+            tool = display_names.get(info.get("tool", "unknown"), info.get("tool", "unknown"))
             state = "COMPLETED" if info.get("success") else ("TIMEOUT" if info.get("timed_out") else "FAILED")
             self.console.print(f"{tool}: {state}")
 
@@ -145,6 +145,12 @@ class TerminalReporter:
         if not target.evidence:
             self.console.print("  [!] No reconnaissance evidence was collected in this session.")
         else:
+            display_names = {"NmapXMLParser":"ForgeScan", "HTTPParser":"ForgeProbe", "WhatWebParser":"ForgeTech", "GobusterParser":"ForgeDiscover", "DirbParser":"ForgeDiscover", "TLSParser":"ForgeTLS", "DNSParser":"ForgeDNS", "GenericTextParser":"ForgeCore"}
+            seen = set()
             for evidence in target.evidence:
-                self.console.print(f"  {evidence.source_file} ({evidence.source_type})")
+                label = display_names.get(evidence.source_type, evidence.source_type)
+                key = (evidence.source_file, label)
+                if key in seen: continue
+                seen.add(key)
+                self.console.print(f"  {evidence.source_file} ({label})")
         self.console.print("\n")
