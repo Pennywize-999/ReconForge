@@ -19,6 +19,11 @@ class Analyzer:
         "plan.json", "target.json", "execution.json", "report.json", "report.html",
     }
     INTERNAL_LOG_SUFFIXES = ("_exec.log",)
+    # Structured scanner output is reconnaissance evidence, not arbitrary target
+    # content. Running generic token heuristics over Nmap XML and WhatWeb output
+    # creates false positives from fingerprints, SSH host keys, hashes and
+    # encoded plugin metadata. Only HTTP response/header content is eligible.
+    UNCLASSIFIED_SOURCE_FILES = {"headers.txt"}
     INTERNAL_TOKENS = {
         "traceroute", "starting", "finished", "progress", "downloaded", "generated",
         "scanning", "target", "command", "output_file", "url_base", "wordlist_files",
@@ -74,7 +79,9 @@ class Analyzer:
             target.evidence.append(Evidence(file_path, "Unknown", "File could not be parsed."))
 
         # Never treat ReconForge's own command/execution logs as target intelligence.
-        if not os.path.basename(file_path).endswith(self.INTERNAL_LOG_SUFFIXES):
+        # Do not run the generic heuristic over structured scanner output.
+        basename = os.path.basename(file_path)
+        if not basename.endswith(self.INTERNAL_LOG_SUFFIXES) and basename in self.UNCLASSIFIED_SOURCE_FILES:
             self._extract_unclassified(file_path, target)
         self._run_waf_analysis(target)
         return target
@@ -151,7 +158,6 @@ class Analyzer:
         if new_host.ip != "unknown":
             existing_host = target.hosts.get(new_host.ip)
 
-        # A placeholder host may have been created while parsing a non-host-specific file.
         if existing_host is None and "unknown" in target.hosts and new_host.ip != "unknown":
             existing_host = target.hosts["unknown"]
             del target.hosts["unknown"]
