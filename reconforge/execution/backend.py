@@ -181,12 +181,29 @@ class RealExecutionBackend(ExecutionBackend):
         label = DISPLAY_NAMES.get(tp.tool, tp.tool)
         self.console.print(f"  [>] {label}: running")
 
-        # Do not use Rich Live/status spinners around subprocesses. Live rendering
-        # can leave large blank areas or appear frozen in some terminals and
-        # terminal multiplexers. The subprocess remains synchronous and bounded
-        # by the executor timeout.
+        # Keep subprocess output deterministic. Rich Live/status rendering can
+        # leave large blank regions or appear frozen in some terminals and TTY
+        # multiplexers. The subprocess remains synchronous and bounded by the
+        # executor timeout.
         result = self.executor.execute(tp)
         results.append(result)
+
+        # DNS is special: a target having no PTR/A record is normal discovery
+        # information, not a failed ReconForge component. Classify DNS output
+        # before checking the process return code because BIND's `host` utility
+        # has historically returned different codes for NXDOMAIN/no-record
+        # responses across versions/platforms.
+        if tp.tool == "dns_lookup":
+            dns_state = self._classify_dns_result(result)
+            if dns_state == "no-record":
+                self.console.print(f"  [INFO] {label}: no DNS record")
+                return result
+            if dns_state == "resolver-error":
+                if result.timed_out:
+                    self.console.print(f"  [TIMEOUT] {label}: resolver timeout")
+                else:
+                    self.console.print(f"  [WARN] {label}: resolver failure, continuing")
+                return result
 
         if result.success:
             self.console.print(f"  [OK] {label}: completed")
@@ -196,22 +213,13 @@ class RealExecutionBackend(ExecutionBackend):
             self.console.print(f"  [TIMEOUT] {label}: unresolved")
             return result
 
-        if tp.tool == "dns_lookup":
-            dns_state = self._classify_dns_result(result)
-            if dns_state == "no-record":
-                self.console.print(f"  [INFO] {label}: no DNS record")
-                return result
-            if dns_state == "resolver-error":
-                self.console.print(f"  [WARN] {label}: resolver failure, continuing")
-                return result
-
         self.console.print(f"  [WARN] {label}: failed, continuing")
         return result
 
     @staticmethod
     def _classify_dns_result(result) -> str:
-        """Classify host(1) failures without treating NXDOMAIN as a tool failure."""
-        text = f"{result.stdout}\n{result.stderr}".lower()
+        """Classify host(1) results without treating normal no-record replies as errors."""
+        text = f"{result.stdout}\n{result.stderr}\n{result.error}".lower()
 
         resolver_error_markers = (
             "servfail",
@@ -223,6 +231,9 @@ class RealExecutionBackend(ExecutionBackend):
             "network is unreachable",
             "temporary failure in name resolution",
             "communications error",
+            "network unreachable",
+            "connection reset",
+            "connection refused",
         )
         if any(marker in text for marker in resolver_error_markers):
             return "resolver-error"
@@ -231,7 +242,6 @@ class RealExecutionBackend(ExecutionBackend):
             "nxdomain",
             "host not found",
             "not found:",
-            "not found",
             "no such host",
             "domain name not found",
             "can't find",
@@ -239,8 +249,17 @@ class RealExecutionBackend(ExecutionBackend):
             "has no address",
             "no address associated",
             "name or service not known",
+            "non-existent domain",
+            "no ptr record",
+            "no address",
         )
         if any(marker in text for marker in no_record_markers):
+            return "no-record"
+
+        # `host` output can vary by BIND version. A reverse lookup that exits
+        # non-zero without resolver-failure markers is still generally a
+        # no-record result. Keep true resolver failures above this fallback.
+        if result.tool == "dns_lookup" and not result.timed_out:
             return "no-record"
 
         return "unknown-error"
