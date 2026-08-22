@@ -1,8 +1,18 @@
+# High-signal baseline paths
 !robots.txt
 !sitemap.xml
 !favicon.ico
-index.html
-index.php
+!index.html
+!index.php
+!phpinfo.php
+!server-status
+!server-info
+!.htaccess
+!.htpasswd
+!.hta
+!wp-admin/
+!wp-login.php
+!wp-json/
 admin
 login
 logout
@@ -12,6 +22,9 @@ api
 api/v1
 api/v2
 docs
+swagger
+swagger.json
+openapi.json
 uploads
 upload
 files
@@ -31,8 +44,6 @@ configuration
 status
 health
 healthz
-server-status
-server-info
 .git/
 .env
 README.txt
