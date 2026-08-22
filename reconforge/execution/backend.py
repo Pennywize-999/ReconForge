@@ -56,6 +56,13 @@ class RealExecutionBackend(ExecutionBackend):
         self.tls_adapter = TlsCollectorAdapter()
 
     def execute(self, plan: ReconPlan):
+        # Interactive execution historically reached this backend without a
+        # session directory. Always establish a writable output root before
+        # any adapter constructs tool output paths.
+        if not plan.output_directory:
+            plan.output_directory = os.path.join("sessions", "current")
+        os.makedirs(plan.output_directory, exist_ok=True)
+
         results = []
         self._header(plan)
 
