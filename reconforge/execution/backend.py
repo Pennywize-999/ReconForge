@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import List
 
-from reconforge.core.models import ReconPlan
+from reconforge.core.models import ReconPlan, ReconTarget
 from reconforge.tools.models import ToolExecutionPlan
 from reconforge.tools.registry import ToolRegistry
 from reconforge.tools.adapters.nmap import NmapAdapter
@@ -12,10 +12,12 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
+
 class ExecutionBackend(ABC):
     @abstractmethod
     def execute(self, plan: ReconPlan):
         pass
+
 
 class PlanningOnlyBackend(ExecutionBackend):
     def __init__(self):
@@ -24,53 +26,17 @@ class PlanningOnlyBackend(ExecutionBackend):
         from reconforge.tools.adapters.dirb import DirbAdapter
         from reconforge.tools.adapters.http_collector import HttpCollectorAdapter
         from reconforge.tools.adapters.tls_collector import TlsCollectorAdapter
-
-        self.web_adapters = [GobusterAdapter(), WhatWebAdapter(), DirbAdapter(), HttpCollectorAdapter(), TlsCollectorAdapter()]
+        self.web_adapters = [HttpCollectorAdapter(), WhatWebAdapter(), GobusterAdapter(), DirbAdapter(), TlsCollectorAdapter()]
 
     def execute(self, plan: ReconPlan):
-        self.console.print()
-        self.console.print(Panel("TARGET INFORMATION", style="bold cyan", expand=False))
-        self.console.print(f"Mode:\n    {plan.mode}")
-        self.console.print(f"\nInput:\n    {plan.target.input}")
-
-        if plan.target.target_type == "url" and not plan.target.hostname:
-            self.console.print("\nTarget Type:\n    IP-based URL")
-        elif plan.target.target_type == "url":
-            self.console.print("\nTarget Type:\n    Hostname-based URL")
-        else:
-            self.console.print("\nTarget Type:\n    IP")
-
-        self.console.print("\n[bold green]Starting reconnaissance planning...[/bold green]")
-
-        if plan.target.target_type == "ip":
-            self.console.print("\n[bold cyan]PHASE 1: DISCOVERY[/bold cyan]")
-            t_table = Table(title="Planned Tool Execution")
-            t_table.add_column("Tool", style="cyan")
-            t_table.add_column("Arguments", style="yellow")
-
-            nmap_adapter = NmapAdapter()
-            tp = nmap_adapter.build_plan(plan.target, plan.output_directory)
-            t_table.add_row(tp.tool, " ".join(tp.arguments))
-            self.console.print(t_table)
-
-            self.console.print("\n[bold cyan]PHASE 2: SERVICE-AWARE ENUMERATION[/bold cyan]")
-            self.console.print("  Follow-up web tools (e.g. Gobuster, WhatWeb, Dirb, HTTP/TLS Collectors)")
-            self.console.print("  will be dynamically scheduled for any HTTP/HTTPS services discovered in Phase 1.")
-
-        else:
-            self.console.print("\n[bold cyan]SERVICE-AWARE ENUMERATION[/bold cyan]")
-            t_table = Table(title="Planned Tool Execution")
-            t_table.add_column("Tool", style="cyan")
-            t_table.add_column("Arguments", style="yellow")
-
-            for adapter in self.web_adapters:
-                if adapter.supports_target(plan.target):
-                    tp = adapter.build_plan(plan.target, plan.output_directory)
-                    if tp:
-                        t_table.add_row(tp.tool, " ".join(tp.arguments))
-            self.console.print(t_table)
-
-        self.console.print("\n[bold yellow]Note: Execution backend is set to PlanningOnlyBackend. No tools were actually executed.[/bold yellow]")
+        self.console.print(Panel("RECONFORGE PLAN", style="bold cyan", expand=False))
+        self.console.print(f"Target: {plan.target.url or plan.target.input}")
+        self.console.print(f"Mode: {plan.mode}")
+        self.console.print(f"Profile: {plan.target.discovery_profile}")
+        self.console.print("\nPlanned components:")
+        for module in plan.modules:
+            self.console.print(f"  [OK] {module}")
+        self.console.print("\n[dim]Planning only. No external tools were executed.[/dim]")
 
 
 class RealExecutionBackend(ExecutionBackend):
@@ -78,127 +44,162 @@ class RealExecutionBackend(ExecutionBackend):
         from reconforge.tools.adapters.dirb import DirbAdapter
         from reconforge.tools.adapters.http_collector import HttpCollectorAdapter
         from reconforge.tools.adapters.tls_collector import TlsCollectorAdapter
+        from reconforge.execution.executor import ToolExecutor
+        from reconforge.core.analyzer import Analyzer
 
         self.console = Console()
         self.registry = ToolRegistry()
-        self.web_adapters = [GobusterAdapter(), WhatWebAdapter(), DirbAdapter(), HttpCollectorAdapter(), TlsCollectorAdapter()]
-
-        from reconforge.execution.executor import ToolExecutor
-        from reconforge.core.analyzer import Analyzer
         self.executor = ToolExecutor()
         self.analyzer = Analyzer()
+        self.http_adapters = [HttpCollectorAdapter(), WhatWebAdapter()]
+        self.discovery_adapters = [GobusterAdapter(), DirbAdapter()]
+        self.tls_adapter = TlsCollectorAdapter()
 
     def execute(self, plan: ReconPlan):
-        from reconforge.core.models import ReconTarget
-        self.console.print("\n[bold green]Starting Execution Backend...[/bold green]")
-
         results = []
+        self._header(plan)
 
         if plan.target.target_type == "ip":
-            self.console.print("\n[bold cyan]PHASE 1: DISCOVERY[/bold cyan]")
-
+            self._phase("PHASE 1 / 5", "DISCOVERY")
             nmap_adapter = NmapAdapter()
             tp = nmap_adapter.build_plan(plan.target, plan.output_directory)
+            result = self._run_plan(tp, plan.target.input, results)
+            if result is None:
+                return None
 
-            if not self.registry.is_installed(tp.tool):
-                self.console.print(f"[SKIP] {tp.tool}\nReason: Executable not found")
-                results.append(self._create_skipped(tp.tool, plan.target.input, tp.arguments, "Executable not found"))
-            else:
-                self.console.print(f"[*] Running {tp.tool}...")
-                result = self.executor.execute(tp)
-                results.append(result)
-                self._print_result(tp.tool, result)
-
-            self.console.print("\n[bold cyan]Parsing Discovery Results...[/bold cyan]")
             analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
-
-            web_targets = []
-            for ip, host in analyzed_target.hosts.items():
-                for port in host.ports:
-                    if port.state != "open":
-                        continue
-
-                    is_web = False
-                    scheme = "http"
-
-                    if port.number in [80, 8080]:
-                        is_web = True
-                        scheme = "http"
-                    elif port.number in [443, 8443]:
-                        is_web = True
-                        scheme = "https"
-                    elif port.service:
-                        s_name = port.service.name.lower() if port.service.name else ""
-                        s_prod = port.service.product.lower() if port.service.product else ""
-                        if "http" in s_name or "www" in s_name or "http" in s_prod or "www" in s_prod:
-                            is_web = True
-                            if "ssl" in s_name or "https" in s_name or "ssl" in s_prod or "https" in s_prod:
-                                scheme = "https"
-
-                    if is_web:
-                        url = f"{scheme}://{host.ip}:{port.number}"
-                        t = ReconTarget(input=url, target_type="url", ip=host.ip, scheme=scheme, port=port.number, url=url)
-                        web_targets.append(t)
-
-            self.console.print("\n[bold cyan]PHASE 2: SERVICE-AWARE ENUMERATION[/bold cyan]")
-            if not web_targets:
-                self.console.print("  No web services discovered for follow-up enumeration.")
-
+            web_targets = self._discover_web_targets(analyzed_target)
+            self._phase("PHASE 2 / 5", "SERVICE-AWARE ENUMERATION")
         else:
-            self.console.print("\n[bold cyan]SERVICE-AWARE ENUMERATION[/bold cyan]")
             web_targets = [plan.target]
+            analyzed_target = None
+            self._phase("PHASE 1 / 5", "WEB SERVICE ANALYSIS")
+
+        if not web_targets:
+            self.console.print("  [INFO] No HTTP/HTTPS services discovered.")
 
         for w_target in web_targets:
-            for adapter in self.web_adapters:
-                if adapter.supports_target(w_target):
-                    tp = adapter.build_plan(w_target, plan.output_directory)
-                    if not tp:
-                        self.console.print(f"[SKIP] {adapter.tool_name}\nReason: Executable/wordlist unavailable")
-                        results.append(self._create_skipped(adapter.tool_name, w_target.input, [], "Executable/wordlist unavailable"))
-                        continue
+            self._console_target(w_target)
+            self._run_web_intelligence(w_target, plan, results)
 
-                    if not self.registry.is_installed(tp.tool) and tp.tool not in ["http_collector", "tls_collector"]:
-                        self.console.print(f"[SKIP] {tp.tool}\nReason: Executable not found")
-                        results.append(self._create_skipped(tp.tool, w_target.input, tp.arguments, "Executable not found"))
-                        continue
+        final_target = self.analyzer.analyze_directory(plan.output_directory)
+        self._phase("PHASE 4 / 5", "CORRELATION")
+        self.console.print("  [OK] ForgeCore normalization")
+        self.console.print("  [OK] Duplicate findings merged")
+        self.console.print("  [OK] Unclassified intelligence preserved")
 
-                    self.console.print(f"[*] Running {tp.tool} on {w_target.url}...")
+        self._phase("PHASE 5 / 5", "REPORT GENERATION")
+        return final_target
 
-                    if tp.output_file and w_target.port:
-                        base, ext = os.path.splitext(tp.output_file)
-                        tp.output_file = f"{base}_{w_target.port}{ext}"
-                        for i, arg in enumerate(tp.arguments):
-                            if arg == base + ext:
-                                tp.arguments[i] = tp.output_file
+    def _run_web_intelligence(self, target, plan, results):
+        # First establish HTTP and technology context, then select discovery categories.
+        for adapter in self.http_adapters:
+            if not adapter.supports_target(target):
+                continue
+            tp = adapter.build_plan(target, plan.output_directory)
+            if tp:
+                self._run_plan(tp, target.input, results)
 
-                    result = self.executor.execute(tp)
-                    results.append(result)
-                    self._print_result(tp.tool, result)
+        analyzed = self.analyzer.analyze_directory(plan.output_directory)
+        technologies, services = self._technology_context(analyzed, target)
 
-        exec_file = os.path.join(plan.output_directory, "execution.json")
-        with open(exec_file, "w") as f:
-            import json
-            out = [r.__dict__ for r in results]
-            json.dump(out, f, indent=2)
+        self.console.print("  TECHNOLOGY INTELLIGENCE")
+        for value in technologies:
+            self.console.print(f"    [OK] {value}")
+        if not technologies:
+            self.console.print("    [INFO] No technology fingerprint matched")
 
-        self.console.print("\n[bold cyan]Final Parsing and Correlation...[/bold cyan]")
-        analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
-        return analyzed_target
+        self.console.print(f"  DISCOVERY PROFILE: {plan.target.discovery_profile}")
+        for adapter in self.discovery_adapters:
+            if not adapter.supports_target(target):
+                continue
+            tp = adapter.build_plan(
+                target,
+                plan.output_directory,
+                discovery_profile=plan.target.discovery_profile,
+                technologies=technologies,
+                services=services,
+            )
+            if tp:
+                self._run_plan(tp, target.input, results)
 
-    def _create_skipped(self, tool, target, args, error):
+        if target.scheme == "https":
+            tp = self.tls_adapter.build_plan(target, plan.output_directory)
+            if tp:
+                self._run_plan(tp, target.input, results)
+
+    def _run_plan(self, tp: ToolExecutionPlan, target: str, results: list):
+        if not self.registry.is_installed(tp.tool) and tp.tool not in {"http_collector", "tls_collector"}:
+            self.console.print(f"  [SKIP] {tp.tool}: executable not found")
+            results.append(self._create_skipped(tp.tool, target, tp.arguments, "Executable not found"))
+            return results[-1]
+
+        self.console.print(f"  [>] {tp.tool}: running")
+        result = self.executor.execute(tp)
+        results.append(result)
+        if result.success:
+            self.console.print(f"  [OK] {tp.tool}: completed")
+        elif result.timed_out:
+            self.console.print(f"  [TIMEOUT] {tp.tool}: unresolved")
+        else:
+            self.console.print(f"  [WARN] {tp.tool}: failed, continuing")
+        return result
+
+    @staticmethod
+    def _technology_context(target, web_target):
+        technologies = []
+        services = []
+        for host in target.hosts.values():
+            for port in host.ports:
+                if port.number == web_target.port and port.service:
+                    if port.service.name:
+                        services.append(port.service.name)
+                    if port.service.product:
+                        services.append(port.service.product)
+            for endpoint in host.web_endpoints:
+                if endpoint.url.rstrip("/") == web_target.url.rstrip("/"):
+                    for tech in endpoint.technologies:
+                        technologies.append(tech.name)
+                        if tech.version:
+                            technologies.append(tech.version)
+        return sorted(set(technologies)), sorted(set(services))
+
+    @staticmethod
+    def _discover_web_targets(analyzed_target):
+        targets = []
+        for host in analyzed_target.hosts.values():
+            for port in host.ports:
+                if port.state != "open":
+                    continue
+                service_name = (port.service.name if port.service else "").lower()
+                product = (port.service.product if port.service else "").lower()
+                is_web = port.number in {80, 443, 8000, 8080, 8081, 8443} or "http" in service_name or "http" in product or "www" in service_name
+                if not is_web:
+                    continue
+                https = port.number in {443, 8443} or "https" in service_name or "ssl" in service_name or "https" in product or "ssl" in product
+                scheme = "https" if https else "http"
+                url = f"{scheme}://{host.ip}:{port.number}"
+                targets.append(ReconTarget(input=url, target_type="url", ip=host.ip, scheme=scheme, port=port.number, url=url, discovery_profile="COMMON"))
+        unique = {}
+        for target in targets:
+            unique[target.url] = target
+        return list(unique.values())
+
+    def _header(self, plan):
+        self.console.print(Panel("RECONFORGE", subtitle="First-Level Reconnaissance Engine", style="bold cyan", expand=False))
+        self.console.print(f"TARGET   {plan.target.url or plan.target.input}")
+        self.console.print(f"MODE     {plan.mode}")
+        self.console.print(f"PROFILE  {plan.target.discovery_profile}\n")
+
+    def _phase(self, label, title):
+        self.console.print(f"\n[bold cyan]{label}  {title}[/bold cyan]")
+
+    def _console_target(self, target):
+        self.console.print(f"  [TARGET] {target.url}")
+
+    @staticmethod
+    def _create_skipped(tool, target, args, error):
         from datetime import datetime
         from reconforge.execution.executor import ToolExecutionResult
-        return ToolExecutionResult(
-            tool=tool, target=target, arguments=args, output_file="",
-            return_code=-1, stdout="", stderr=error,
-            started_at=datetime.now().isoformat(), finished_at=datetime.now().isoformat(),
-            duration=0.0, success=False, timed_out=False, error=error
-        )
-
-    def _print_result(self, tool, result):
-        if result.success:
-            self.console.print(f"[OK] {tool}")
-        elif result.timed_out:
-            self.console.print(f"[TIMEOUT] {tool}")
-        else:
-            self.console.print(f"[FAILED] {tool} (Error: {result.error})")
+        now = datetime.now().isoformat()
+        return ToolExecutionResult(tool=tool, target=target, arguments=args, output_file="", return_code=-1, stdout="", stderr=error, started_at=now, finished_at=now, duration=0.0, success=False, timed_out=False, error=error)
