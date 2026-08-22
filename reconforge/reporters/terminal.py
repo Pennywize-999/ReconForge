@@ -155,8 +155,16 @@ class TerminalReporter:
         self.console.print(table)
 
     def _print_vulnerabilities(self, host: Host):
+        verified = [
+            vuln for vuln in host.vulnerabilities
+            if vuln.source == "NVD 2.0 exact CPE match"
+            and vuln.confidence.value == "HIGH"
+            and vuln.cpe
+            and vuln.detected_version
+        ]
+
         self.console.print("\n[bold cyan]VULNERABILITY INTELLIGENCE[/bold cyan]\n" + "-" * 60)
-        if not host.vulnerabilities:
+        if not verified:
             self.console.print("No verified vulnerable CPE matches identified.")
             self.console.print("Only exact versioned CPE matches verified by the vulnerability source are reported.")
             return
@@ -164,7 +172,7 @@ class TerminalReporter:
         table = Table(box=None, pad_edge=False, show_edge=False, expand=False)
         for col in ("CVE", "SEVERITY", "CVSS", "CONFIDENCE", "PRODUCT"):
             table.add_column(col, no_wrap=True)
-        for vuln in sorted(host.vulnerabilities, key=lambda v: (v.severity, v.cve_id or "")):
+        for vuln in sorted(verified, key=lambda v: (v.severity, v.cve_id or "")):
             table.add_row(
                 vuln.cve_id or "VULN",
                 vuln.severity,
@@ -177,7 +185,7 @@ class TerminalReporter:
         detail = Table(box=None, pad_edge=False, show_edge=False, expand=False)
         for col in ("CVE", "DETECTED VERSION", "SOURCE", "REFERENCES"):
             detail.add_column(col, overflow="fold")
-        for vuln in host.vulnerabilities:
+        for vuln in verified:
             detail.add_row(
                 vuln.cve_id or "VULN",
                 vuln.detected_version or "unknown",
