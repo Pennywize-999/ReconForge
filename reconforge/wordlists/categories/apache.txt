@@ -1,0 +1,8 @@
+!server-status
+server-info
+!.htaccess
+!.htpasswd
+!.hta
+cgi-bin/
+icons/
+manual/

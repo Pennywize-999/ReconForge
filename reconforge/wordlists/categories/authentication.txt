@@ -1,0 +1,17 @@
+!login
+!signin
+!logout
+!auth
+!authenticate
+!session
+!sessions
+register
+signup
+sign-up
+forgot-password
+reset-password
+change-password
+account
+profile
+users
+user

@@ -1,8 +1,0 @@
-smbclient -L 10.10.10.25
-Sharename       Type      Comment
----------       ----      -------
-ADMIN$          Disk      Remote Admin
-C$              Disk      Default share
-IPC$            IPC       Remote IPC
-Backup          Disk      Backup Share
-Anonymous login successful

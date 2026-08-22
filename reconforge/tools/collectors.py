@@ -8,6 +8,7 @@ from typing import Any
 
 from reconforge.tools.models import ToolExecutionPlan
 
+
 def execute_http_collector(plan: ToolExecutionPlan, config: Any):
     started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
     start_time = time.time()
@@ -21,12 +22,13 @@ def execute_http_collector(plan: ToolExecutionPlan, config: Any):
     timed_out = False
 
     try:
-        req = urllib.request.Request(target_url, headers={'User-Agent': 'ReconForge/0.2.0'})
+        req = urllib.request.Request(target_url, headers={'User-Agent': 'ReconForge/1.0.0'})
         with urllib.request.urlopen(req, timeout=config.timeout) as response:
             status = response.status
             headers = response.getheaders()
 
             with open(output_file, "w", encoding="utf-8") as f:
+                f.write(f"Request-URL: {target_url}\n")
                 f.write(f"HTTP/1.1 {status} OK\n")
                 for k, v in headers:
                     f.write(f"{k}: {v}\n")
@@ -59,6 +61,7 @@ def execute_http_collector(plan: ToolExecutionPlan, config: Any):
         timed_out=timed_out,
         error=error_msg
     )
+
 
 def execute_tls_collector(plan: ToolExecutionPlan, config: Any):
     started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
