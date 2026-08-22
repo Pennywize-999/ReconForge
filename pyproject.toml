@@ -22,11 +22,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0"
-]
-
 [tool.setuptools.package-data]
 reconforge = ["templates/*.html", "wordlists/*.txt", "wordlists/categories/*.txt"]
 
