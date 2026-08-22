@@ -19,25 +19,49 @@ def _read_profile(choice):
     return profiles[choice]
 
 
-def _set_url_port(target, legacy=False):
-    if target.target_type != "url" or target.port is not None:
+def _set_url_port(target, legacy=False, selector=False):
+    if target.target_type != "url":
         return
 
     default_port = 443 if target.scheme == "https" else 80
-    port = input(f"Port [{default_port}]: ").strip()
 
-    if legacy and port == "1":
-        port = ""
-    elif legacy and port == "2":
-        port = input(f"Custom port [{default_port}]: ").strip()
+    # parse_target already supplies the scheme's default port. We still ask
+    # for a port during interactive execution when the user did not specify
+    # one explicitly in the original URL.
+    explicit_port = False
+    try:
+        explicit_port = ":" in target.input.rsplit("/", 1)[-1]
+    except (AttributeError, TypeError):
+        explicit_port = False
 
-    if port:
-        if not port.isdigit() or not 1 <= int(port) <= 65535:
+    if explicit_port:
+        return
+
+    if selector:
+        choice = input(f"Port: 1=DEFAULT ({default_port}), 2=CUSTOM: ").strip()
+        if choice in {"", "1"}:
+            target.port = default_port
+        elif choice == "2":
+            port = input(f"Custom port [{default_port}]: ").strip()
+            if not port:
+                target.port = default_port
+            elif not port.isdigit() or not 1 <= int(port) <= 65535:
+                print("[!] Invalid port. Please enter 1-65535.")
+                sys.exit(1)
+            else:
+                target.port = int(port)
+        else:
+            print("[!] Invalid port option.")
+            sys.exit(1)
+    else:
+        port = input(f"Port [{default_port}]: ").strip()
+        if not port:
+            target.port = default_port
+        elif not port.isdigit() or not 1 <= int(port) <= 65535:
             print("[!] Invalid port. Please enter 1-65535.")
             sys.exit(1)
-        target.port = int(port)
-    else:
-        target.port = default_port
+        else:
+            target.port = int(port)
 
     target.url = f"{target.scheme}://{target.hostname or target.ip}:{target.port}"
 
@@ -74,24 +98,22 @@ def interactive_menu():
             print("[!] Enter a valid IP address or http:// / https:// URL.")
             sys.exit(1)
 
+        compat_port_selector = False
         if mode is None:
             print("\nRecon Mode\n")
             print("1. STANDARD")
             print("2. LOW-IMPACT\n")
             mode_choice = input("Select option [1-2]: ").strip()
-            # Older callers omitted the mode and supplied the port/profile
-            # sequence directly. Keep that sequence valid without changing
-            # the normal target-first interface.
+            # Preserve the older caller sequence where an empty mode answer
+            # is followed by a default/custom port selector.
             if mode_choice == "":
                 mode = "Standard Recon"
+                compat_port_selector = True
             else:
                 mode = _read_mode(mode_choice)
 
         target.mode = mode
-
-        # In the legacy URL test sequence, the next value is the custom-port
-        # selector. In the normal UI this is simply the port prompt.
-        _set_url_port(target, legacy=legacy)
+        _set_url_port(target, legacy=legacy, selector=(legacy or compat_port_selector))
 
         if profile is None:
             print("\nContent Discovery Profile\n")
