@@ -22,6 +22,7 @@ class TerminalReporter:
             self._print_vulnerabilities(host)
             self._print_unclassified(host)
         self._print_execution(target)
+        self._print_evidence_section(target)
 
     def report_waf(self, target: Target):
         self.console.print(Panel("[bold white]RECONFORGE WAF / CDN ANALYSIS[/bold white]", expand=False, style="blue"))
@@ -51,13 +52,7 @@ class TerminalReporter:
             table.add_column(col)
         for port in host.ports:
             service = port.service
-            table.add_row(
-                f"{port.number}/{port.protocol}",
-                port.state,
-                service.name if service else "unknown",
-                service.product if service else "",
-                service.version if service else "",
-            )
+            table.add_row(f"{port.number}/{port.protocol}", port.state, service.name if service else "unknown", service.product if service else "", service.version if service else "")
         self.console.print(table)
 
     def _print_web(self, host: Host):
@@ -86,90 +81,70 @@ class TerminalReporter:
 
     @staticmethod
     def _url_significance(status, category):
-        if status in (200, 201, 204):
-            return "Accessible resource"
-        if status in (301, 302, 307, 308):
-            return "Redirect"
-        if status in (401,):
-            return "Authentication required"
-        if status in (403,):
-            return "Protected resource"
-        if status in (405,):
-            return "Method-specific endpoint"
-        if status and status >= 500:
-            return "Server/application error"
-        if status and status not in (404,):
-            return "Unusual HTTP response"
+        if status in (200, 201, 204): return "Accessible resource"
+        if status in (301, 302, 307, 308): return "Redirect"
+        if status == 401: return "Authentication required"
+        if status == 403: return "Protected resource"
+        if status == 405: return "Method-specific endpoint"
+        if status and status >= 500: return "Server/application error"
+        if status and status != 404: return "Unusual HTTP response"
         return category or "Observed resource"
 
     def _print_tls(self, host: Host):
         tls = [f for f in host.findings if f.source_type == "TLSParser"]
-        if not tls:
-            return
+        if not tls: return
         self.console.print("\n[bold cyan]TLS / CERTIFICATES[/bold cyan]\n" + "-" * 60)
-        for finding in tls:
-            self.console.print(f"{finding.title}: {finding.description}")
+        for finding in tls: self.console.print(f"{finding.title}: {finding.description}")
 
     def _print_waf(self, host: Host):
         waf = host.waf_analysis
-        if not waf:
-            return
+        if not waf: return
         self.console.print("\n[bold cyan]WAF / CDN ANALYSIS[/bold cyan]\n" + "-" * 60)
         self.console.print(f"Detection:     {'Possible' if waf.detected else 'None'}")
         self.console.print(f"Confidence:    {waf.confidence.value}")
-        if waf.provider:
-            self.console.print(f"Provider:      {waf.provider}")
+        if waf.provider: self.console.print(f"Provider:      {waf.provider}")
         self.console.print(f"Rate limiting: {'Detected' if waf.rate_limiting else 'None'}")
         for status, count in waf.status_counts.items():
-            if status in {"403", "429"}:
-                self.console.print(f"HTTP {status}:    {count}")
+            if status in {"403", "429"}: self.console.print(f"HTTP {status}:    {count}")
 
     def _print_findings(self, host: Host):
         findings = [f for f in host.findings if f.finding_type != FindingType.VULNERABILITY and f.source_type != "TLSParser"]
-        if not findings:
-            return
+        if not findings: return
         self.console.print("\n[bold cyan]IMPORTANT FINDINGS[/bold cyan]\n" + "-" * 60)
         table = Table(box=None, pad_edge=False)
-        table.add_column("TYPE")
-        table.add_column("SEVERITY")
-        table.add_column("CONFIDENCE")
-        table.add_column("TITLE")
-        for finding in findings:
-            table.add_row(finding.finding_type.value, finding.severity, finding.confidence.value, finding.title)
+        for col in ("TYPE", "SEVERITY", "CONFIDENCE", "TITLE"): table.add_column(col)
+        for finding in findings: table.add_row(finding.finding_type.value, finding.severity, finding.confidence.value, finding.title)
         self.console.print(table)
 
     def _print_vulnerabilities(self, host: Host):
-        if not host.vulnerabilities:
-            return
+        if not host.vulnerabilities: return
         self.console.print("\n[bold cyan]VULNERABILITY INTELLIGENCE[/bold cyan]\n" + "-" * 60)
         table = Table(box=None, pad_edge=False)
-        for col in ("CVE", "SEVERITY", "CVSS", "CONFIDENCE", "PRODUCT"):
-            table.add_column(col)
-        for vuln in host.vulnerabilities:
-            table.add_row(vuln.cve_id or "VULN", vuln.severity, str(vuln.cvss or "N/A"), vuln.confidence.value, vuln.affected_product)
+        for col in ("CVE", "SEVERITY", "CVSS", "CONFIDENCE", "PRODUCT"): table.add_column(col)
+        for vuln in host.vulnerabilities: table.add_row(vuln.cve_id or "VULN", vuln.severity, str(vuln.cvss or "N/A"), vuln.confidence.value, vuln.affected_product)
         self.console.print(table)
 
     def _print_unclassified(self, host: Host):
-        if not host.unclassified:
-            return
+        if not host.unclassified: return
         self.console.print("\n[bold magenta]UNCLASSIFIED INTELLIGENCE[/bold magenta]\n" + "-" * 60)
         table = Table(box=None, pad_edge=False)
-        for col in ("TYPE", "VALUE", "CONTEXT", "POTENTIAL RELEVANCE", "CONFIDENCE"):
-            table.add_column(col)
-        for item in host.unclassified:
-            table.add_row(item.kind, item.value, item.context[:100], item.potential_relevance, item.confidence.value)
+        for col in ("TYPE", "VALUE", "CONTEXT", "POTENTIAL RELEVANCE", "CONFIDENCE"): table.add_column(col)
+        for item in host.unclassified: table.add_row(item.kind, item.value, item.context[:100], item.potential_relevance, item.confidence.value)
         self.console.print(table)
 
     def _print_execution(self, target: Target):
-        if not target.execution:
-            return
+        if not target.execution: return
         self.console.print("\n[bold cyan]EXECUTION SUMMARY[/bold cyan]\n" + "-" * 60)
         for info in target.execution:
             tool = info.get("tool", "unknown")
-            if info.get("success"):
-                state = "COMPLETED"
-            elif info.get("timed_out"):
-                state = "TIMEOUT"
-            else:
-                state = "FAILED"
+            state = "COMPLETED" if info.get("success") else ("TIMEOUT" if info.get("timed_out") else "FAILED")
             self.console.print(f"{tool}: {state}")
+
+    def _print_evidence_section(self, target: Target):
+        self.console.print("\n[bold cyan]SESSION EVIDENCE[/bold cyan]\n" + "-" * 60)
+        if not target.evidence:
+            self.console.print("  [!] No reconnaissance evidence was collected in this session.")
+        else:
+            for evidence in target.evidence:
+                self.console.print(f"  {evidence.source_file} ({evidence.source_type})")
+        self.console.print("\n")
