@@ -15,6 +15,11 @@ class ReconPlanner:
             "components": components,
         }
 
+        # DNS is always useful for an IP/hostname/URL and is deliberately kept
+        # lightweight. It runs before service-aware routing.
+        modules.append("ForgeDNS")
+        components.append("ForgeDNS")
+
         if target.target_type == "ip":
             modules.extend(["ForgeScan", "Network Analysis (Nmap)", "Service Intelligence"])
             components.append("ForgeScan")
