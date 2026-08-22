@@ -7,6 +7,15 @@ from typing import Optional, Dict, Any
 from reconforge.tools.models import ToolExecutionPlan
 from reconforge.core.config import load_config
 
+
+# WhatWeb level 3 is intentionally more active than a normal single-request
+# fingerprint. Keep it bounded so a slow/unresponsive web service cannot make
+# the complete ReconForge run appear frozen for the global 300 second timeout.
+TOOL_TIMEOUTS = {
+    "whatweb": 120,
+}
+
+
 @dataclass
 class ToolExecutionResult:
     tool: str
@@ -22,6 +31,7 @@ class ToolExecutionResult:
     success: bool
     timed_out: bool
     error: str
+
 
 class ToolExecutor:
     def __init__(self):
@@ -40,6 +50,7 @@ class ToolExecutor:
         start_time = time.time()
 
         command = [plan.tool] + plan.arguments
+        timeout = min(self.config.timeout, TOOL_TIMEOUTS.get(plan.tool, self.config.timeout))
 
         stdout_content = ""
         stderr_content = ""
@@ -53,7 +64,7 @@ class ToolExecutor:
                 command,
                 capture_output=True,
                 text=True,
-                timeout=self.config.timeout,
+                timeout=timeout,
                 shell=False
             )
             stdout_content = result.stdout
@@ -65,7 +76,7 @@ class ToolExecutor:
 
         except subprocess.TimeoutExpired as e:
             timed_out = True
-            error_msg = f"Timed out after {self.config.timeout} seconds"
+            error_msg = f"Timed out after {timeout} seconds"
             if e.stdout:
                 stdout_content = e.stdout.decode('utf-8', errors='ignore') if isinstance(e.stdout, bytes) else e.stdout
             if e.stderr:
@@ -80,11 +91,10 @@ class ToolExecutor:
         duration = end_time - start_time
 
         if plan.output_file and not os.path.exists(plan.output_file) and stdout_content and success:
-             # some tools like rustscan or dirb might output directly to stdout if -o is not respected
-             # though our adapters use output files. If they failed to write, we can fallback to stdout.
-             pass
+            # Some tools can write directly to stdout. Current adapters normally
+            # request explicit output files, so this remains a safe fallback hook.
+            pass
 
-        # Write exec log
         if plan.output_file:
             base, _ = os.path.splitext(plan.output_file)
             log_file = f"{base}_exec.log"
