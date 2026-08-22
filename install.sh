@@ -14,7 +14,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/opt/reconforge"
 VENV_DIR="${INSTALL_DIR}/venv"
 BIN_PATH="/usr/local/bin/reconforge"
-REAL_USER="${SUDO_USER:-${USER}}"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -29,14 +28,11 @@ if ! command -v apt-get >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "[+] Checking operating system"
-
 if [[ ! -f /etc/os-release ]]; then
     echo "[!] Cannot determine operating system."
     exit 1
 fi
 
-# Required runtime and reconnaissance utilities used by the current engine.
 PACKAGES=(
     python3
     python3-pip
@@ -49,71 +45,62 @@ PACKAGES=(
     openssl
 )
 
-echo "[+] Updating package index"
+echo "[+] Checking system requirements"
 apt-get update -qq
-
-echo "[+] Checking required system tools"
 apt-get install -y "${PACKAGES[@]}"
-
-echo "[OK] System dependencies ready"
-
+echo "[OK] System requirements ready"
 echo
 
 echo "[+] Installing ReconForge into ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
-
-# Copy the repository into the stable installation location. This keeps the
-# executable independent of the directory from which install.sh was called.
-if [[ "${SCRIPT_DIR}" != "${INSTALL_DIR}" ]]; then
-    rm -rf "${INSTALL_DIR}/app"
-    mkdir -p "${INSTALL_DIR}/app"
-    cp -a "${SCRIPT_DIR}/." "${INSTALL_DIR}/app/"
-else
-    mkdir -p "${INSTALL_DIR}/app"
-    # If the installer is already inside /opt/reconforge, use the existing tree.
-    if [[ ! -f "${INSTALL_DIR}/app/pyproject.toml" ]]; then
-        cp -a "${SCRIPT_DIR}/." "${INSTALL_DIR}/app/"
-    fi
-fi
+rm -rf "${INSTALL_DIR}/app"
+mkdir -p "${INSTALL_DIR}/app"
+cp -a "${SCRIPT_DIR}/." "${INSTALL_DIR}/app/"
 
 APP_DIR="${INSTALL_DIR}/app"
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip >/dev/null
 "${VENV_DIR}/bin/python" -m pip install "${APP_DIR}"
 
-echo "[+] Creating system command"
+echo "[+] Creating ReconForge command"
 ln -sf "${VENV_DIR}/bin/reconforge" "${BIN_PATH}"
 chmod 755 "${BIN_PATH}"
-
-# Keep the installation owned by root while allowing the invoking user to run it.
 chown -R root:root "${INSTALL_DIR}"
 
-# Basic post-install verification.
 echo "[+] Verifying installation"
 if ! "${BIN_PATH}" --help >/dev/null 2>&1; then
-    echo "[!] ReconForge was installed, but the command verification failed."
+    echo "[!] ReconForge installation verification failed."
     exit 1
 fi
 
-# Report availability without failing the installation for optional/missing tools.
 echo
-printf '%s\n' '--------------------------------------------------------------'
-echo "ReconForge dependency status"
-printf '%s\n' '--------------------------------------------------------------'
-for tool in nmap host whatweb gobuster dirb openssl; do
-    if command -v "${tool}" >/dev/null 2>&1; then
-        echo "[OK] ${tool}"
+echo '--------------------------------------------------------------'
+echo 'ReconForge module status'
+echo '--------------------------------------------------------------'
+MODULES=(
+    "ForgeScan|nmap"
+    "ForgeDNS|host"
+    "ForgeTech|whatweb"
+    "ForgeDiscover|gobuster"
+    "ForgeDiscover-Dir|dirb"
+    "ForgeTLS|openssl"
+)
+for entry in "${MODULES[@]}"; do
+    module="${entry%%|*}"
+    binary="${entry##*|}"
+    if command -v "${binary}" >/dev/null 2>&1; then
+        printf '[OK] %-20s ready\n' "${module}"
     else
-        echo "[WARN] ${tool} unavailable"
+        printf '[WARN] %-20s unavailable\n' "${module}"
     fi
 done
-printf '%s\n' '--------------------------------------------------------------'
+echo '--------------------------------------------------------------'
 echo
-printf '%s\n' '[+] ReconForge installation complete.'
+echo '[+] ReconForge installation complete.'
 echo
-printf '%s\n' '    Start ReconForge with:'
-printf '%s\n' '        reconforge'
+echo '    Start ReconForge with:'
+echo '        reconforge'
 echo
-printf '%s\n' '    Installation directory:'
-printf '%s\n' "        ${INSTALL_DIR}"
+echo '    Installation directory:'
+echo "        ${INSTALL_DIR}"
 echo
