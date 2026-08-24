@@ -1,4 +1,4 @@
-# High-signal baseline paths
+# High-signal baseline paths for normal first-level reconnaissance
 !robots.txt
 !sitemap.xml
 !favicon.ico
@@ -25,6 +25,15 @@ docs
 swagger
 swagger.json
 openapi.json
+users
+user
+users/
+timeReport
+timeReport/
+secret
+secret/
+private
+internal
 uploads
 upload
 files
