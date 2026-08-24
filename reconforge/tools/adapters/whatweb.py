@@ -20,13 +20,17 @@ class WhatWebAdapter(ToolAdapter):
 
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> ToolExecutionPlan:
         output_file = os.path.join(output_dir, f"{self.tool_name}.txt")
+        profile = str(kwargs.get("discovery_profile") or getattr(target, "discovery_profile", "COMMON")).upper()
 
-        # DEEP reconnaissance keeps aggressive fingerprinting, but bounds
-        # network concurrency and socket timeouts so one slow endpoint cannot
-        # hold the entire run indefinitely.
+        # COMMON/EXTENDED use WhatWeb's passive/stealthy level so application
+        # fingerprinting is part of normal reconnaissance without turning one
+        # slow target into a long-running scan. DEEP keeps aggressive matching.
+        aggression = "3" if profile == "DEEP" else "1"
+        threads = "3" if profile == "DEEP" else "1"
+
         args = [
-            "-a", "3",
-            "-t", "5",
+            "-a", aggression,
+            "-t", threads,
             "--open-timeout", "5",
             "--read-timeout", "10",
             target.url,
