@@ -18,7 +18,10 @@ class WhatWebParser(BaseParser):
         if not file_path.endswith('.txt'):
             return False
         content = cls.read_file_safe(file_path)[:500]
-        return "http" in content and "[" in content and "]" in content and "WhatWeb" not in content
+        # Require the actual WhatWeb brief-output shape. A generic HTTP body
+        # may contain brackets and the word "http", so the old loose check
+        # could steal headers.txt before HTTPParser saw it.
+        return bool(re.search(r'(?m)^https?://\S+\s+\[\d{3}\]', content)) and "WhatWeb" not in content
 
     @classmethod
     def parse(cls, file_path: str) -> Tuple[List[Host], List[Finding], List[str]]:
@@ -44,9 +47,6 @@ class WhatWebParser(BaseParser):
                 continue
 
             host = Host(ip="unknown", status="up")
-            # Preserve the endpoint hostname exactly as WhatWeb reported it.
-            # An IP is both the target identity and a useful hostname-like label
-            # for compatibility with the existing parser contract and tests.
             host.hostnames.append(ip_or_host)
             if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", ip_or_host):
                 host.ip = ip_or_host
