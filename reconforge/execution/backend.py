@@ -133,8 +133,7 @@ class RealExecutionBackend(ExecutionBackend):
     def _run_web_intelligence(self, target, plan, results):
         # ForgeProbe is the fast, deterministic source for HTTP response
         # headers. Always collect it first so confirmed server technology is
-        # available before deciding whether expensive WhatWeb fingerprinting is
-        # necessary.
+        # available before fingerprinting and content discovery.
         if self.http_collector.supports_target(target):
             tp = self.http_collector.build_plan(target, plan.output_directory)
             if tp:
@@ -143,12 +142,12 @@ class RealExecutionBackend(ExecutionBackend):
         analyzed = self.analyzer.analyze_directory(plan.output_directory)
         technologies, services = self._technology_context(analyzed, target)
 
-        # WhatWeb is a secondary fingerprinting layer, not a prerequisite for
-        # the rest of the reconnaissance pipeline. On COMMON/EXTENDED profiles,
-        # skip it when ForgeProbe already supplied confirmed technology. This
-        # prevents redundant aggressive fingerprinting from consuming the run's
-        # time budget. DEEP explicitly requests the additional fingerprinting.
-        run_whatweb = target.discovery_profile.upper() == "DEEP" or not technologies
+        # STANDARD means normal first-level reconnaissance, so technology
+        # fingerprinting is part of the normal pipeline. LOW-IMPACT avoids the
+        # secondary fingerprinting pass. DEEP also keeps the fingerprinting
+        # layer enabled explicitly.
+        low_impact = "low-impact" in target.mode.lower() or "low impact" in target.mode.lower()
+        run_whatweb = not low_impact
         if run_whatweb and self.whatweb_adapter.supports_target(target):
             tp = self.whatweb_adapter.build_plan(
                 target,
@@ -159,8 +158,6 @@ class RealExecutionBackend(ExecutionBackend):
                 self._run_plan(tp, target.input, results)
             analyzed = self.analyzer.analyze_directory(plan.output_directory)
             technologies, services = self._technology_context(analyzed, target)
-        else:
-            self.console.print("  [OK] ForgeTech: skipped, confirmed technology already available")
 
         self.console.print("  TECHNOLOGY INTELLIGENCE")
         for value in technologies:
