@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from reconforge.core.models import ScanSession, Target, ModelEncoder
 
+
 class SessionManager:
     def __init__(self, output_dir: str = None):
         self.base_dir = output_dir or os.path.normpath(os.path.expanduser("~/.reconforge/sessions"))
@@ -11,7 +12,9 @@ class SessionManager:
         self.current_link = os.path.join(self.base_dir, "current")
 
     def create_session(self, target: Target) -> ScanSession:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # Microseconds prevent two scans started in the same second from
+        # overwriting each other's evidence directory.
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
         session_id = f"session_{timestamp}"
 
         session_dir = os.path.join(self.base_dir, session_id)
@@ -60,13 +63,13 @@ class SessionManager:
         raise ValueError(f"Session {session_id} not found.")
 
     def set_current(self, session_id: str):
-        with open(self.current_link, "w") as f:
+        with open(self.current_link, "w", encoding="utf-8") as f:
             f.write(session_id)
 
     def get_current(self) -> ScanSession:
         if not os.path.exists(self.current_link):
             raise ValueError("No current session found.")
-        with open(self.current_link, "r") as f:
+        with open(self.current_link, "r", encoding="utf-8") as f:
             session_id = f.read().strip()
         return self.load_session(session_id)
 
