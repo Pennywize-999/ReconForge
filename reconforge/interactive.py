@@ -1,3 +1,6 @@
+import dataclasses
+import json
+import os
 import sys
 
 from rich.console import Console
@@ -5,6 +8,8 @@ from rich.panel import Panel
 from rich.text import Text
 
 from reconforge import __version__
+from reconforge.core.models import Target
+from reconforge.core.session import SessionManager
 from reconforge.core.target_parser import parse_target
 
 
@@ -147,14 +152,48 @@ def interactive_menu():
 
 
 def install_cli_overrides(cli_module):
-    """Keep existing CLI commands, but make the interactive path execute for real."""
+    """Keep existing CLI commands, execute interactive scans, and persist every run."""
     from reconforge.execution.backend import PlanningOnlyBackend, RealExecutionBackend
+    from reconforge.reporters.json_ext import JSONReporter
+    from reconforge.reporters.html import HTMLReporter
 
     class InteractiveBackend(PlanningOnlyBackend):
         def execute(self, plan):
-            if plan.target.source == "interactive_execute":
-                return RealExecutionBackend().execute(plan)
-            return super().execute(plan)
+            if plan.target.source != "interactive_execute":
+                return super().execute(plan)
+
+            session_manager = SessionManager()
+            # Create the durable session directory before external tools run.
+            # A valid empty Target is used temporarily, then replaced by the
+            # fully analyzed result before the session is saved.
+            session = session_manager.create_session(Target())
+            plan.output_directory = session_manager.get_session_dir(session.id)
+
+            plan_path = os.path.join(plan.output_directory, "plan.json")
+            with open(plan_path, "w", encoding="utf-8") as handle:
+                json.dump(dataclasses.asdict(plan), handle, indent=2)
+
+            result = RealExecutionBackend().execute(plan)
+            if result is None:
+                return None
+
+            session.target = result
+            session.raw_files = sorted(
+                os.path.relpath(os.path.join(root, name), plan.output_directory)
+                for root, _, files in os.walk(plan.output_directory)
+                for name in files
+                if name != "target.json"
+            )
+            session_manager.save_session(session)
+
+            JSONReporter().report(result, os.path.join(plan.output_directory, "report.json"))
+            HTMLReporter().report(result, os.path.join(plan.output_directory, "report.html"))
+
+            console.print("\n[bold bright_cyan]SCAN SAVED[/bold bright_cyan]")
+            console.print(f"  Session: {session.id}")
+            console.print(f"  Location: {plan.output_directory}")
+            console.print("  Reports: report.json, report.html")
+            return result
 
     cli_module.interactive_menu = interactive_menu
     cli_module.PlanningOnlyBackend = InteractiveBackend
