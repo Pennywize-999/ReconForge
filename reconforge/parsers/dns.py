@@ -5,59 +5,71 @@ from typing import List, Tuple
 from reconforge.core.models import Host, Finding, Evidence, Confidence, FindingType
 from reconforge.parsers.base import BaseParser
 
+
 class DNSParser(BaseParser):
     @classmethod
     def can_parse(cls, file_path: str) -> bool:
         if not file_path.endswith('.txt'):
             return False
-        content = cls.read_file_safe(file_path)[:500]
-        return "has address" in content or "name server" in content or "AXFR" in content
+        content = cls.read_file_safe(file_path)[:1000].lower()
+        return (
+            "has address" in content
+            or "name server" in content
+            or "domain name pointer" in content
+            or "nameserver" in content
+            or "axfr" in content
+        )
 
     @classmethod
     def parse(cls, file_path: str) -> Tuple[List[Host], List[Finding], List[str]]:
         hosts: List[Host] = []
         findings: List[Finding] = []
         errors: List[str] = []
-
         content = cls.read_file_safe(file_path)
         if not content:
             return hosts, findings, ["Failed to read DNS file"]
 
         filename = os.path.basename(file_path)
-
-        for line in content.splitlines():
-            line = line.strip()
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
             if not line:
                 continue
 
-            # e.g., web01.local has address 10.10.10.25
-            match = re.match(r'^([a-zA-Z0-9\.\-]+)\s+has address\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$', line)
+            match = re.match(r'^([a-zA-Z0-9._-]+)\s+has address\s+(\d{1,3}(?:\.\d{1,3}){3})$', line)
             if match:
-                hostname = match.group(1)
-                ip = match.group(2)
-
+                hostname, ip = match.groups()
                 host = next((h for h in hosts if h.ip == ip), None)
                 if not host:
                     host = Host(ip=ip, status="up")
                     hosts.append(host)
-
                 if hostname not in host.hostnames:
                     host.hostnames.append(hostname)
+                continue
 
-            if "Transfer failed" in line or "AXFR record query failed" in line:
+            # Reverse lookup output: "10.0.2.10.in-addr.arpa domain name pointer host.example."
+            ptr = re.search(r'^([^\s]+)\s+domain name pointer\s+([^\s.]+(?:\.[^\s.]+)*)\.?$', line, re.I)
+            if ptr:
+                query, hostname = ptr.groups()
+                ip_match = re.match(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)\.in-addr\.arpa$', query, re.I)
+                ip = ".".join(reversed(ip_match.groups())) if ip_match else "unknown"
+                host = next((h for h in hosts if h.ip == ip), None)
+                if not host:
+                    host = Host(ip=ip, status="up")
+                    hosts.append(host)
+                if hostname not in host.hostnames:
+                    host.hostnames.append(hostname)
                 continue
 
             if "AXFR" in line and "success" in line.lower():
-                finding = Finding(
+                findings.append(Finding(
                     title="DNS Zone Transfer (AXFR) Successful",
                     finding_type=FindingType.VULNERABILITY,
                     severity="HIGH",
                     confidence=Confidence.HIGH,
-                    description="The DNS server allows anonymous zone transfers, exposing internal records.",
+                    description="The DNS server allows anonymous zone transfers, exposing DNS records.",
                     source_file=filename,
                     source_type="DNS",
-                    evidence=[Evidence(source_file=filename, source_type="DNS", content=line)]
-                )
-                findings.append(finding)
+                    evidence=[Evidence(source_file=filename, source_type="DNS", content=line)],
+                ))
 
         return hosts, findings, errors

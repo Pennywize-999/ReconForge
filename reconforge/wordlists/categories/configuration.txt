@@ -1,0 +1,17 @@
+!config
+!configuration
+settings
+settings.json
+config.json
+config.yml
+config.yaml
+application.yml
+application.yaml
+web.config
+local.xml
+.env
+.env.local
+.env.production
+.git/config
+composer.json
+package.json

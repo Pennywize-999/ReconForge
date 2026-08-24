@@ -1,36 +1,34 @@
-# Virtual Environments
+# Local environments
 .venv/
 venv/
 env/
 .venv-test/
 
-# Python Caches
+# Python caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
-# Builds
+# Build artifacts
 *.egg-info/
 dist/
 build/
 
-# IDE and OS
+# IDE and OS files
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
 
-# ReconForge output
+# ReconForge runtime output
 .reconforge/
 sessions/
 reports/
 *.session.json
 
-# Temporaries
+# Temporary files and logs
 *.tmp
 *.log
-!tests/fixtures/*.log
-
 .pytest-tmp/

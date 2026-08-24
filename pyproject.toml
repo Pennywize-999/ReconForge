@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reconforge"
-version = "0.2.0"
+version = "1.0.0"
 authors = [
-  { name="Security Researcher", email="admin@example.com" },
+  { name="ReconForge Project" },
 ]
-description = "An offline reconnaissance result analyzer and reporting application."
+description = "First-level reconnaissance and security-assessment framework for authorized security testing."
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -19,16 +19,15 @@ dependencies = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0"
+    "Operating System :: POSIX",
+    "Topic :: Security",
 ]
 
 [tool.setuptools.package-data]
-reconforge = ["templates/*.html"]
+reconforge = ["templates/*.html", "wordlists/*.txt", "wordlists/categories/*.txt"]
+
+[tool.setuptools.packages.find]
+include = ["reconforge*"]
 
 [project.scripts]
 reconforge = "reconforge.cli:main"

@@ -1,11 +1,10 @@
 import os
-import re
 from typing import List, Tuple
 from bs4 import BeautifulSoup
 
-from reconforge.core.models import Host, Port, Service, Finding, Vulnerability, Evidence, Confidence, FindingType, Technology
+from reconforge.core.models import Host, Port, Service, Finding, Confidence, Technology
 from reconforge.parsers.base import BaseParser
-from reconforge.core.vuln import check_vulnerability_match, parse_cvss_severity
+
 
 class NmapXMLParser(BaseParser):
     @classmethod
@@ -32,7 +31,6 @@ class NmapXMLParser(BaseParser):
                 status_node = host_node.find('status')
                 status = status_node['state'] if status_node and status_node.has_attr('state') else "unknown"
 
-                # Get IP
                 ipv4 = ""
                 ipv6 = ""
                 mac = ""
@@ -51,14 +49,12 @@ class NmapXMLParser(BaseParser):
 
                 host = Host(ip=ip, status=status, ipv6=ipv6, mac=mac)
 
-                # Hostnames
                 hostnames = host_node.find('hostnames')
                 if hostnames:
                     for hname in hostnames.find_all('hostname'):
                         if hname.has_attr('name'):
                             host.hostnames.append(hname['name'])
 
-                # OS Detection
                 os_node = host_node.find('os')
                 if os_node:
                     for osmatch in os_node.find_all('osmatch'):
@@ -70,7 +66,6 @@ class NmapXMLParser(BaseParser):
                         if cpe_txt and cpe_txt not in host.os_cpes:
                             host.os_cpes.append(cpe_txt)
 
-                # Ports
                 ports_node = host_node.find('ports')
                 if ports_node:
                     for port_node in ports_node.find_all('port'):
@@ -85,7 +80,6 @@ class NmapXMLParser(BaseParser):
                             s_name = service_node.get('name', '')
                             s_product = service_node.get('product', '')
                             s_version = service_node.get('version', '')
-
                             cpe_nodes = service_node.find_all('cpe')
                             s_cpe = cpe_nodes[0].text if cpe_nodes else ""
 
@@ -96,77 +90,24 @@ class NmapXMLParser(BaseParser):
                                     version=s_version,
                                     sources=[os.path.basename(file_path)],
                                     detected_values=[f"{s_product} {s_version}"],
-                                    confidence=Confidence.HIGH
+                                    confidence=Confidence.HIGH,
                                 ))
 
-                            service = Service(name=s_name, product=s_product, version=s_version, cpe=s_cpe, technologies=techs)
+                            service = Service(
+                                name=s_name,
+                                product=s_product,
+                                version=s_version,
+                                cpe=s_cpe,
+                                technologies=techs,
+                            )
 
-                        port = Port(number=port_id, protocol=protocol, state=state, service=service)
+                        port = Port(
+                            number=port_id,
+                            protocol=protocol,
+                            state=state,
+                            service=service,
+                        )
                         host.ports.append(port)
-
-                        # NSE scripts for vulnerabilities
-                        for script_node in port_node.find_all('script'):
-                            script_id = script_node.get('id', '')
-                            script_output = script_node.get('output', '')
-
-                            # Parse vulners specifically
-                            if script_id == 'vulners':
-                                # Nmap vulners output often looks like:
-                                # cpe:/a:apache:http_server:2.4.41:
-                                #   CVE-2021-41773  7.5  https://vulners.com/cve/...
-                                for line in script_output.splitlines():
-                                    vuln_match = re.search(r'(CVE-\d{4}-\d{4,7})\s+([\d\.]+)\s+(https?://\S+)', line)
-                                    if vuln_match:
-                                        cve_id = vuln_match.group(1)
-                                        cvss = float(vuln_match.group(2))
-                                        ref = vuln_match.group(3)
-
-                                        evidence = Evidence(
-                                            source_file=os.path.basename(file_path),
-                                            source_type="nmap-vulners",
-                                            content=line.strip()
-                                        )
-
-                                        vuln = Vulnerability(
-                                            cve_id=cve_id,
-                                            title=f"{cve_id} detected via Nmap vulners",
-                                            description="Vulnerability identified based on CPE matching by Nmap.",
-                                            severity=parse_cvss_severity(cvss),
-                                            cvss=cvss,
-                                            affected_product=service.product if service else "Unknown",
-                                            detected_version=service.version if service else None,
-                                            cpe=service.cpe if service else None,
-                                            confidence=Confidence.MEDIUM,
-                                            source="Nmap",
-                                            evidence=[evidence],
-                                            references=[ref]
-                                        )
-                                        host.vulnerabilities.append(vuln)
-
-                            # Generic CVE regex for other scripts
-                            else:
-                                cve_matches = re.findall(r'(CVE-\d{4}-\d{4,7})', script_output)
-                                if cve_matches:
-                                    for cve in set(cve_matches):
-                                        evidence = Evidence(
-                                            source_file=os.path.basename(file_path),
-                                            source_type=f"nmap-nse-{script_id}",
-                                            content=script_output[:1000]
-                                        )
-                                        vuln = Vulnerability(
-                                            cve_id=cve,
-                                            title=f"{cve} reported by {script_id}",
-                                            description=script_output[:500],
-                                            severity="UNKNOWN",
-                                            cvss=None,
-                                            affected_product=service.product if service else "Unknown",
-                                            detected_version=service.version if service else None,
-                                            cpe=service.cpe if service else None,
-                                            confidence=Confidence.MEDIUM,
-                                            source="Nmap",
-                                            evidence=[evidence]
-                                        )
-                                        host.vulnerabilities.append(vuln)
 
                 hosts.append(host)
 

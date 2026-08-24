@@ -30,6 +30,26 @@ class Evidence:
         return cls(**data)
 
 @dataclass
+class UnclassifiedIntelligence:
+    value: str
+    kind: str
+    context: str = ""
+    source: str = ""
+    classification: str = "UNCLASSIFIED"
+    potential_relevance: str = ""
+    confidence: Confidence = Confidence.UNKNOWN
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "UnclassifiedIntelligence":
+        d = dict(data)
+        if isinstance(d.get("confidence"), str):
+            try:
+                d["confidence"] = Confidence(d["confidence"])
+            except ValueError:
+                d["confidence"] = Confidence.UNKNOWN
+        return cls(**d)
+
+@dataclass
 class Vulnerability:
     cve_id: Optional[str]
     title: str
@@ -57,7 +77,6 @@ class Vulnerability:
                 d["confidence"] = Confidence.UNKNOWN
         if "evidence" in d:
             d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"]]
-        # compatibility with older model
         if "affected_version" in d:
             d["detected_version"] = d.pop("affected_version")
         return cls(**d)
@@ -214,6 +233,7 @@ class Host:
     web_endpoints: List[WebEndpoint] = field(default_factory=list)
     vulnerabilities: List[Vulnerability] = field(default_factory=list)
     findings: List[Finding] = field(default_factory=list)
+    unclassified: List[UnclassifiedIntelligence] = field(default_factory=list)
     waf_analysis: Optional[WAFAnalysis] = None
 
     @classmethod
@@ -227,6 +247,8 @@ class Host:
             d["vulnerabilities"] = [Vulnerability.from_dict(v) for v in d["vulnerabilities"]]
         if "findings" in d:
             d["findings"] = [Finding.from_dict(f) for f in d["findings"]]
+        if "unclassified" in d:
+            d["unclassified"] = [UnclassifiedIntelligence.from_dict(v) for v in d["unclassified"]]
         if "waf_analysis" in d and d["waf_analysis"]:
             d["waf_analysis"] = WAFAnalysis.from_dict(d["waf_analysis"])
         return cls(**d)
@@ -275,7 +297,7 @@ class ModelEncoder(json.JSONEncoder):
 @dataclass
 class ReconTarget:
     input: str
-    target_type: str  # 'ip' or 'url'
+    target_type: str
     ip: Optional[str] = None
     hostname: Optional[str] = None
     scheme: Optional[str] = None
@@ -283,6 +305,7 @@ class ReconTarget:
     url: Optional[str] = None
     mode: str = "Standard Recon"
     source: str = "interactive"
+    discovery_profile: str = "COMMON"
 
 @dataclass
 class ReconPlan:
