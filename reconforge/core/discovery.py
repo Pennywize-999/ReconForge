@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, List, Dict, Set
+from typing import Iterable, List, Set
 
 
 @dataclass(frozen=True)
@@ -48,6 +48,8 @@ class DiscoveryEngine:
         if profile not in self.PROFILE_LIMITS:
             raise ValueError("profile must be COMMON, EXTENDED or DEEP")
 
+        # COMMON is the normal first-level reconnaissance baseline. EXTENDED and
+        # DEEP add breadth, they do not define what is considered "normal".
         selected: List[str] = ["general"]
         if profile in {"EXTENDED", "DEEP"}:
             selected += ["admin", "authentication", "backup", "configuration", "api"]
@@ -70,6 +72,7 @@ class DiscoveryEngine:
             "express": "node",
             "tomcat": "java",
             "java": "java",
+            "qdpm": "qdpm",
         }
         for token, category in aliases.items():
             if token in tokens and category not in selected:
