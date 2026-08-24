@@ -24,8 +24,8 @@ ReconForge does not treat every unusual result as a vulnerability. Unverified in
 |---|---|---|
 | **ForgeDNS** | DNS and reverse-DNS intelligence | DNS/`host` lookup |
 | **ForgeScan** | Port, service, version, OS and CPE discovery | Nmap |
-| **ForgeProbe** | HTTP response and header collection | Internal HTTP collector |
-| **ForgeTech** | Web technology fingerprinting | WhatWeb |
+| **ForgeProbe** | HTTP response, headers and bounded body collection | Internal HTTP collector |
+| **ForgeTech** | Web technology fingerprinting | WhatWeb plus HTTP application fingerprints |
 | **ForgeDiscover** | Web path and file discovery | Gobuster, Dirb and configured discovery modules |
 | **ForgeTLS** | HTTPS/TLS and certificate intelligence | Internal TLS collector |
 | **ForgeCore** | Normalize, correlate and deduplicate results | ReconForge core |
@@ -47,7 +47,9 @@ A missing DNS/PTR record is reported as an informational result, not as a tool f
 
 ## ForgeScan
 
-The primary network discovery stage. It collects information such as:
+The primary network discovery stage. STANDARD mode performs the complete TCP discovery pass with SYN scanning, default scripts, service/version detection, OS detection and all TCP ports. This is the normal first-level scan, not a reduced scan.
+
+It collects information such as:
 
 - Open ports and states
 - Protocols and services
@@ -73,33 +75,42 @@ ReconForge does not blindly run web enumeration against services that are not id
 
 ## ForgeProbe
 
-Collects HTTP-level information including status codes, headers, redirects, content size, server information, and endpoint observations.
+Collects HTTP-level information including status codes, headers, final URLs after redirects, content size, cookies, server information, and a bounded response body used for application fingerprinting.
 
 Useful HTTP responses are retained even when they are not `200`. For example, `401`, `403`, `405`, `429`, redirects, and selected server errors can provide useful reconnaissance information.
 
 ## ForgeTech
 
-Uses the available WhatWeb capability to identify web technologies such as:
+Technology fingerprinting is part of STANDARD reconnaissance. ReconForge uses WhatWeb with bounded timeouts and also inspects the HTTP response body for high-confidence application markers. This allows applications such as qdPM to be identified even when the web server only reports Apache.
+
+Examples of useful technology intelligence include:
 
 - Web server software
 - Detected versions
 - Frameworks
 - CMS indicators
-- Technology fingerprints
-- Other WhatWeb plugin results
+- Application fingerprints
+- JavaScript library versions
+- Meta-generator information
 
 ## ForgeDiscover
 
 Performs web content discovery against applicable HTTP/HTTPS services.
 
-Depending on the selected profile and installed tools, ReconForge can use capabilities such as Gobuster and Dirb. Results from different sources are normalized so the final report does not repeat the same URL several times.
+**COMMON means normal first-level reconnaissance.** It is not intentionally limited to only a few obvious paths. Its baseline includes common administration, authentication, API, application, hidden-resource, configuration, backup, user, report and secret-style paths. EXTENDED and DEEP add broader coverage and larger category sets.
+
+Application-specific categories are added when technology intelligence identifies the application. For example, qdPM-specific paths can be added after qdPM is confirmed.
+
+Results from different sources are normalized so the final report does not repeat the same URL several times.
 
 The final report uses full URLs, for example:
 
 | URL | Status | Significance |
 |---|---:|---|
 | `http://target/` | 200 | Accessible resource |
-| `http://target/index.html` | 200 | Accessible resource |
+| `http://target/users` | 200 | Accessible resource |
+| `http://target/timeReport` | 200 | Accessible resource |
+| `http://target/secret/` | 200 | Accessible resource |
 | `http://target/robots.txt` | 200 | Accessible resource |
 | `http://target/server-status` | 403 | Protected resource |
 
@@ -109,7 +120,7 @@ ReconForge provides three discovery profiles:
 
 ### COMMON
 
-Baseline coverage for normal first-level reconnaissance. Fast and practical.
+Normal first-level reconnaissance. It includes the expected common web paths, application paths, hidden resources and baseline files without requiring the user to switch to a deeper profile for ordinary coverage.
 
 ### EXTENDED
 
@@ -119,7 +130,7 @@ Broader path and file coverage when COMMON does not find enough useful resources
 
 The largest configured coverage profile. Intended when coverage is more important than scan time and the target is authorized for deeper enumeration.
 
-Wordlists are categorized instead of relying on one uncontrolled giant list. Categories can cover common paths, administration, authentication, APIs, CMS structures, WordPress paths, backup/configuration names, development/test paths, static assets, and common files/extensions.
+Wordlists are categorized instead of relying on one uncontrolled giant list. Categories can cover common paths, administration, authentication, APIs, CMS structures, application-specific paths, WordPress paths, backup/configuration names, development/test paths, static assets, and common files/extensions.
 
 ## ForgeTLS
 
@@ -170,12 +181,37 @@ ReconForge can show potentially useful information that cannot yet be confidentl
 - Encoded-looking values
 - Application-specific text
 - Unexpected protocol data
+- Session cookies, classified separately from encoded/token-like values
 
-These are investigation leads, **not automatic vulnerabilities or credentials**. This is useful when a seemingly random value from a CTF or application later turns out to be important.
+These are investigation leads, **not automatic vulnerabilities or credentials**. A session cookie is not automatically treated as a password or encoded credential.
 
 ## WAF / CDN Analysis
 
 HTTP observations can be analyzed for indicators associated with WAFs, CDNs, rate limiting, `403`, `429`, and other filtering behavior. Results are presented with confidence because a single `403` does not prove that a WAF exists.
+
+## Persistent Scan Sessions
+
+Every interactive scan is saved automatically. ReconForge creates a unique session directory under:
+
+```text
+~/.reconforge/sessions/session_<timestamp>
+```
+
+Each completed scan stores the raw tool output, execution logs, plan, normalized target data, JSON report, and HTML report. The latest session is tracked by:
+
+```text
+~/.reconforge/sessions/current
+```
+
+Useful commands include:
+
+```bash
+reconforge sessions
+reconforge show <session_id>
+reconforge report <session_id> --format html
+```
+
+You do **not** need to delete a `sessions/current` directory before every scan. ReconForge creates a new unique session for each run.
 
 ## Final Report
 
@@ -203,27 +239,42 @@ ReconForge currently integrates or recognizes capabilities including:
 - **Dirb**: web content discovery
 - **WhatWeb**: web technology fingerprinting
 - **Feroxbuster**: content discovery when installed/configured
-- **Internal HTTP collector**: HTTP information collection
+- **Internal HTTP collector**: HTTP information collection and application fingerprinting
 - **Internal TLS collector**: TLS information collection
 
 ReconForge checks for required external executables before attempting to use them.
 
 ## Installation
 
-On Kali Linux:
+### Kali Linux, recommended
+
+Clone the project branch and run the installer:
 
 ```bash
+git clone -b reconforge-intelligence-engine https://github.com/Pennywize-999/ReconForge.git
 cd ReconForge
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+sudo ./install.sh
 ```
 
-Then start ReconForge:
+After installation, start ReconForge from anywhere with:
 
 ```bash
 reconforge
 ```
+
+The installer handles the Python environment, package installation, required Kali tools, and the global `reconforge` command automatically.
+
+### Update an existing installation
+
+```bash
+cd ~/ReconForge
+git pull --ff-only origin reconforge-intelligence-engine
+sudo ./install.sh
+hash -r
+reconforge
+```
+
+There is no need to remove the previous installation or delete scan sessions. Existing sessions remain under `~/.reconforge/sessions`.
 
 ## Quick Start
 
@@ -239,7 +290,14 @@ You will be asked for:
 2. Recon mode
 3. Content discovery profile
 
-ReconForge then determines which modules apply to the services it discovers.
+For a normal complete first-level assessment, select:
+
+```text
+STANDARD
+COMMON
+```
+
+ReconForge then determines which service-aware modules apply to the services it discovers.
 
 Typical flow:
 
@@ -248,7 +306,7 @@ Target
   |
   +--> ForgeDNS
   |
-  +--> ForgeScan
+  +--> ForgeScan  (STANDARD: all TCP ports + service/version/OS/scripts)
           |
           +--> HTTP/HTTPS --> ForgeProbe
           |                  ForgeTech
@@ -299,6 +357,7 @@ ReconForge is a reconnaissance and analysis assistant, not a replacement for exp
 - An unusual string is not automatically a credential or secret.
 - WAF/CDN detection is probabilistic.
 - Deeper content discovery increases scan time and request volume.
+- A path being discovered does not prove that it is exploitable.
 
 Validate important findings before exploitation or formal reporting.
 
