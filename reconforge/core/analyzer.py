@@ -78,8 +78,6 @@ class Analyzer:
         if not parsed:
             target.evidence.append(Evidence(file_path, "Unknown", "File could not be parsed."))
 
-        # Never treat ReconForge's own command/execution logs as target intelligence.
-        # Do not run the generic heuristic over structured scanner output.
         basename = os.path.basename(file_path)
         if not basename.endswith(self.INTERNAL_LOG_SUFFIXES) and basename in self.UNCLASSIFIED_SOURCE_FILES:
             self._extract_unclassified(file_path, target)
@@ -101,6 +99,12 @@ class Analyzer:
         if not raw.strip():
             return
 
+        # headers.txt now contains a bounded response body for application
+        # fingerprinting. Only inspect the HTTP header block here. Otherwise
+        # ordinary HTML/CSS/JS strings would be incorrectly promoted to token
+        # intelligence.
+        header_block = raw.split("\n\n", 1)[0]
+
         host = next((h for h in target.hosts.values() if h.ip != "unknown"), None)
         if host is None:
             host = next(iter(target.hosts.values()), None)
@@ -109,7 +113,7 @@ class Analyzer:
             target.hosts["unknown"] = host
 
         seen = set()
-        for line in raw.splitlines():
+        for line in header_block.splitlines():
             value = re.sub(r"\s+", " ", line).strip()
             if not value or len(value) > 300:
                 continue
@@ -118,7 +122,25 @@ class Analyzer:
                 continue
             if re.match(r"^(command|output_file|start_time|end_time|progress|scanning|url_base|wordlist_files)\s*[:=]", lower):
                 continue
-            if re.fullmatch(r"[A-Z][A-Z0-9_-]{3,30}", value) and value.lower() in self.INTERNAL_TOKENS:
+
+            # Cookies are useful reconnaissance data, but a session identifier
+            # is not automatically an encoded credential. Classify Set-Cookie
+            # separately to avoid misleading TOKEN-LIKE findings.
+            cookie_match = re.match(r"(?i)^set-cookie:\s*([^=;\s]+)=([^;\s]*)", value)
+            if cookie_match:
+                cookie_name = cookie_match.group(1)
+                cookie_value = cookie_match.group(2)
+                if cookie_value:
+                    item = UnclassifiedIntelligence(
+                        value=cookie_value,
+                        kind="SESSION-COOKIE",
+                        context=value[:180],
+                        source=file_path,
+                        potential_relevance=f"HTTP cookie: {cookie_name}",
+                        confidence=Confidence.INFO,
+                    )
+                    if not any(u.kind == item.kind and u.value == item.value for u in host.unclassified):
+                        host.unclassified.append(item)
                 continue
 
             kind = None
@@ -133,17 +155,14 @@ class Analyzer:
             if m_hash:
                 extracted = m_hash.group(0)
                 kind, relevance, confidence = "HASH-LIKE", "Potential credential/data artifact", Confidence.MEDIUM
-            elif m_b64 and len(m_b64.group(0)) >= 20:
-                extracted = m_b64.group(0)
-                kind, relevance, confidence = "ENCODED/TOKEN-LIKE", "Potential encoded value or token", Confidence.LOW
             elif credential_context or key_context:
                 match = re.search(r"(?:password|passwd|pwd|secret|token|api[_-]?key|authorization|private key|client_secret|access_key|secret_key)\s*[:=]\s*['\"]?([^'\"\s,;]+)", value, re.I)
                 if match:
                     extracted = match.group(1)
                     kind, relevance, confidence = "CREDENTIAL/SECRET-LIKE", "Potential credential or secret value", Confidence.MEDIUM
-            elif re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{5,63}", value) and not value.startswith(("http", "www")):
-                if any(ch.isdigit() for ch in value) or "-" in value or "_" in value or len(value) >= 10:
-                    kind, relevance, confidence = "UNCLASSIFIED-TEXT", "Potential identifier, credential candidate, or application value", Confidence.LOW
+            elif m_b64 and len(m_b64.group(0)) >= 20:
+                extracted = m_b64.group(0)
+                kind, relevance, confidence = "ENCODED/TOKEN-LIKE", "Potential encoded value or token", Confidence.LOW
 
             if kind:
                 key = (kind, extracted, os.path.basename(file_path))
@@ -154,12 +173,6 @@ class Analyzer:
                         host.unclassified.append(item)
 
     def _merge_host(self, target: Target, new_host: Host):
-        # Parsers that operate on standalone HTTP/content files may not have
-        # enough information to identify the target and therefore emit an
-        # "unknown" host. Once a concrete host has been discovered by Nmap or
-        # another parser, never create a second unknown host. Merge that data
-        # into the existing concrete host instead. This prevents duplicate
-        # reports such as HOST INFORMATION -> IP: unknown at report time.
         if new_host.ip == "unknown":
             known_hosts = [h for h in target.hosts.values() if h.ip != "unknown"]
             if len(known_hosts) == 1:
