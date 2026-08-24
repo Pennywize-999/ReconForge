@@ -91,8 +91,59 @@ class HTTPParser(BaseParser):
                 description=f"The server identifies itself as: {server_str}",
                 source_file=filename,
                 source_type="HTTPParser",
-                evidence=[Evidence(source_file=filename, source_type="HTTPParser", content=content)],
+                evidence=[Evidence(source_file=filename, source_type="HTTPParser", content=content[:12000])],
             ))
+
+        # The HTTP collector stores a bounded response body after the header
+        # block. Fingerprint applications that do not identify themselves via
+        # Server headers, including qdPM, and retain useful metadata such as
+        # generator tags and JavaScript library versions.
+        body = content.split("\n\n", 1)[1] if "\n\n" in content else ""
+        if endpoint is None and endpoint_url:
+            endpoint = WebEndpoint(
+                url=endpoint_url,
+                path=parsed.path or "/",
+                status_code=status_code,
+                source=filename,
+            )
+
+        if endpoint is not None and body:
+            qdpm_match = re.search(r'(?i)\bqdPM\s*(?:v|version)?\s*([0-9]+(?:\.[0-9]+){1,3})?', body)
+            if qdpm_match:
+                endpoint.technologies.append(Technology(
+                    name="qdPM",
+                    version=qdpm_match.group(1),
+                    sources=[filename],
+                    detected_values=[qdpm_match.group(0).strip()],
+                    confidence=Confidence.HIGH,
+                ))
+
+            generator_match = re.search(
+                r'(?is)<meta[^>]+name=["\']generator["\'][^>]+content=["\']([^"\']+)["\']',
+                body,
+            )
+            if generator_match:
+                generator = generator_match.group(1).strip()
+                gm = re.match(r'([^\s/]+(?:\s+[^\s/]+)?)\s*(?:[/ ]\s*([0-9][0-9.\-]*))?$', generator)
+                name = gm.group(1) if gm else generator
+                version = gm.group(2) if gm else None
+                endpoint.technologies.append(Technology(
+                    name="MetaGenerator",
+                    version=version,
+                    sources=[filename],
+                    detected_values=[generator],
+                    confidence=Confidence.HIGH,
+                ))
+
+            jquery_match = re.search(r'(?i)jquery(?:\.min)?[.-]?([0-9]+\.[0-9]+(?:\.[0-9]+)?)', body)
+            if jquery_match:
+                endpoint.technologies.append(Technology(
+                    name="jQuery",
+                    version=jquery_match.group(1),
+                    sources=[filename],
+                    detected_values=[jquery_match.group(0)],
+                    confidence=Confidence.HIGH,
+                ))
 
         if endpoint is not None and not any(
             e.url == endpoint.url and e.status_code == endpoint.status_code
