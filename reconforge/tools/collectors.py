@@ -9,6 +9,9 @@ from typing import Any
 from reconforge.tools.models import ToolExecutionPlan
 
 
+HTTP_BODY_LIMIT = 1024 * 1024
+
+
 def execute_http_collector(plan: ToolExecutionPlan, config: Any):
     started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
     start_time = time.time()
@@ -26,14 +29,29 @@ def execute_http_collector(plan: ToolExecutionPlan, config: Any):
         with urllib.request.urlopen(req, timeout=config.timeout) as response:
             status = response.status
             headers = response.getheaders()
+            final_url = response.geturl()
+            content_type = response.headers.get("Content-Type", "")
+            body_bytes = response.read(HTTP_BODY_LIMIT)
+            charset = "utf-8"
+            if "charset=" in content_type.lower():
+                charset = content_type.lower().split("charset=", 1)[1].split(";", 1)[0].strip() or "utf-8"
+            try:
+                body = body_bytes.decode(charset, errors="replace")
+            except LookupError:
+                body = body_bytes.decode("utf-8", errors="replace")
 
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(f"Request-URL: {target_url}\n")
+                f.write(f"Final-URL: {final_url}\n")
                 f.write(f"HTTP/1.1 {status} OK\n")
                 for k, v in headers:
                     f.write(f"{k}: {v}\n")
                 f.write("\n")
-            stdout = f"Collected HTTP {status}"
+                # Keep a bounded copy of the response body so application
+                # fingerprinting can identify frameworks/CMSs that do not
+                # expose themselves through Server headers alone.
+                f.write(body)
+            stdout = f"Collected HTTP {status} ({len(body_bytes)} body bytes)"
             success = True
     except urllib.error.URLError as e:
         error_msg = str(e)
