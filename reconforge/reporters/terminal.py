@@ -2,7 +2,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
-from reconforge.core.models import Target, Host, Confidence, FindingType
+from reconforge.core.models import Target, Host, Confidence, FindingType, WebEndpoint
 
 class TerminalReporter:
     def __init__(self):
@@ -23,8 +23,6 @@ class TerminalReporter:
             self._print_findings(host)
             self._print_vulnerabilities(host)
 
-        self._print_execution_section(target)
-        self._print_evidence_section(target)
 
     def report_waf(self, target: Target):
         self.console.print("\n")
@@ -95,10 +93,6 @@ class TerminalReporter:
                 self.console.print(f"    Title: {', '.join(titles)}")
 
     def _print_http_info(self, host: Host):
-        if not host.web_endpoints:
-            return
-
-    def _print_http_info(self, host: Host):
         pass # Merged into directory enumeration below
 
     def _print_directory_enumeration(self, host: Host):
@@ -106,28 +100,37 @@ class TerminalReporter:
             return
 
         self.console.print("\n[bold cyan]DIRECTORY / HTTP ENUMERATION[/bold cyan]")
-        
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Path")
-        table.add_column("Status")
-        table.add_column("Sources")
-        table.add_column("Details")
+        self.console.print("-" * 60)
 
-        for ep in sorted(host.web_endpoints, key=lambda x: x.path):
+        table = Table(box=None, show_header=True, pad_edge=False)
+        table.add_column("URL", style="bold")
+        table.add_column("STATUS")
+        table.add_column("DETAILS")
+
+        for ep in sorted(host.web_endpoints, key=lambda x: (x.url if x.url else x.path)):
+            display_url = ep.url
+            if not display_url or not (display_url.startswith("http://") or display_url.startswith("https://")):
+                scheme = "http"
+                port_str = ""
+                web_port = next((p for p in host.ports if p.service and "http" in (p.service.name or "").lower()), None)
+                if web_port:
+                    if web_port.number in [443, 8443, 9443] or (web_port.service and "ssl" in (web_port.service.name or "").lower()):
+                        scheme = "https"
+                    if web_port.number not in [80, 443]:
+                        port_str = f":{web_port.number}"
+                host_str = host.ip if host.ip else (host.hostnames[0] if host.hostnames else "127.0.0.1")
+                path = ep.path if ep.path.startswith("/") else f"/{ep.path}"
+                display_url = f"{scheme}://{host_str}{port_str}{path}"
+
             statuses = ", ".join(str(s) for s in sorted(ep.status_codes))
-            
-            all_sources = set()
-            for s_list in ep.sources.values():
-                all_sources.update(s_list)
-            sources_str = ", ".join(sorted(list(all_sources)))
-            
+
             details = ""
             if ep.redirect_location:
                 details = f"--> {ep.redirect_location}"
             elif ep.content_length is not None:
                 details = f"Size: {ep.content_length}"
 
-            table.add_row(ep.path, statuses, sources_str, details)
+            table.add_row(display_url, statuses, details)
 
         self.console.print(table)
         self.console.print("")
@@ -159,7 +162,6 @@ class TerminalReporter:
         for status, count in waf.status_counts.items():
             if status in ["403", "429"]:
                 self.console.print(f"HTTP {status}:        {count}")
-
 
     def _print_findings(self, host: Host):
         display_findings = [f for f in host.findings if f.finding_type != FindingType.VULNERABILITY and f.source_type != "TLSParser"]
@@ -218,7 +220,6 @@ class TerminalReporter:
                 self.console.print(f"    {cap}: Timed Out")
             else:
                 self.console.print(f"    {cap}: Failed")
-
 
     def _print_evidence_section(self, target: Target):
         self.console.print("\n[bold cyan]SESSION EVIDENCE[/bold cyan]")
