@@ -19,8 +19,15 @@ class WhatWebAdapter(ToolAdapter):
 
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> ToolExecutionPlan:
         output_file = os.path.join(output_dir, f"{self.tool_name}.txt")
+        depth = getattr(target, "depth", "Common")
 
-        args = ["-a", "3", target.url, "--log-brief", output_file]
+        aggression = "1"
+        if depth == "Medium":
+            aggression = "3"
+        elif depth == "Deep":
+            aggression = "3"
+
+        args = ["-a", aggression, target.url, "--log-brief", output_file]
 
         return ToolExecutionPlan(
             tool=self.tool_name,
@@ -28,3 +35,4 @@ class WhatWebAdapter(ToolAdapter):
             arguments=args,
             output_file=output_file
         )
+

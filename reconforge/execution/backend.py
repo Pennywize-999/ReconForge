@@ -90,18 +90,16 @@ class RealExecutionBackend(ExecutionBackend):
 
     def execute(self, plan: ReconPlan):
         from reconforge.core.models import ReconTarget
-        self.console.print("\n[bold green]Starting Execution Backend...[/bold green]")
+        self.console.print("\n[bold cyan][1/4] Discovery[/bold cyan]")
 
         results = []
 
         if plan.target.target_type == "ip":
-            self.console.print("\n[bold cyan]PHASE 1: DISCOVERY[/bold cyan]")
-
             nmap_adapter = NmapAdapter()
             tp = nmap_adapter.build_plan(plan.target, plan.output_directory)
 
             if not self.registry.is_installed(tp.tool):
-                self.console.print(f"[SKIP] {tp.tool}\nReason: Executable not found")
+                self.console.print(f"[-] {tp.tool}: Executable not found")
                 results.append(self._create_skipped(tp.tool, plan.target.input, tp.arguments, "Executable not found"))
             else:
                 self.console.print(f"[*] Running {tp.tool}...")
@@ -109,7 +107,7 @@ class RealExecutionBackend(ExecutionBackend):
                 results.append(result)
                 self._print_result(tp.tool, result)
 
-            self.console.print("\n[bold cyan]Parsing Discovery Results...[/bold cyan]")
+            self.console.print("\n[bold cyan][2/4] Service analysis[/bold cyan]")
             analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
 
             web_targets = []
@@ -137,15 +135,26 @@ class RealExecutionBackend(ExecutionBackend):
 
                     if is_web:
                         url = f"{scheme}://{host.ip}:{port.number}"
-                        t = ReconTarget(input=url, target_type="url", ip=host.ip, scheme=scheme, port=port.number, url=url)
+                        t = ReconTarget(
+                            input=url,
+                            target_type="url",
+                            ip=host.ip,
+                            scheme=scheme,
+                            port=port.number,
+                            url=url,
+                            mode=plan.target.mode,
+                            depth=getattr(plan.target, "depth", "Common")
+                        )
                         web_targets.append(t)
 
-            self.console.print("\n[bold cyan]PHASE 2: SERVICE-AWARE ENUMERATION[/bold cyan]")
+            self.console.print("\n[bold cyan][3/4] Adaptive enumeration[/bold cyan]")
             if not web_targets:
                 self.console.print("  No web services discovered for follow-up enumeration.")
 
         else:
-            self.console.print("\n[bold cyan]SERVICE-AWARE ENUMERATION[/bold cyan]")
+            self.console.print("\n[bold cyan][2/4] Service analysis[/bold cyan]")
+            self.console.print("  URL target detected.")
+            self.console.print("\n[bold cyan][3/4] Adaptive enumeration[/bold cyan]")
             web_targets = [plan.target]
 
         for w_target in web_targets:
@@ -153,12 +162,12 @@ class RealExecutionBackend(ExecutionBackend):
                 if adapter.supports_target(w_target):
                     tp = adapter.build_plan(w_target, plan.output_directory)
                     if not tp:
-                        self.console.print(f"[SKIP] {adapter.tool_name}\nReason: Executable/wordlist unavailable")
+                        self.console.print(f"[-] {adapter.tool_name}: Executable/wordlist unavailable")
                         results.append(self._create_skipped(adapter.tool_name, w_target.input, [], "Executable/wordlist unavailable"))
                         continue
 
                     if not self.registry.is_installed(tp.tool) and tp.tool not in ["http_collector", "tls_collector"]:
-                        self.console.print(f"[SKIP] {tp.tool}\nReason: Executable not found")
+                        self.console.print(f"[-] {tp.tool}: Executable not found")
                         results.append(self._create_skipped(tp.tool, w_target.input, tp.arguments, "Executable not found"))
                         continue
 
@@ -184,9 +193,10 @@ class RealExecutionBackend(ExecutionBackend):
             out = [r.__dict__ for r in results]
             json.dump(out, f, indent=2)
 
-        self.console.print("\n[bold cyan]Final Parsing and Correlation...[/bold cyan]")
+        self.console.print("\n[bold cyan][4/4] Correlation[/bold cyan]")
         analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
         return analyzed_target
+
 
     def _create_skipped(self, tool, target, args, error):
         from datetime import datetime

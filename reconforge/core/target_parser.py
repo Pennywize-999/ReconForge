@@ -11,7 +11,7 @@ def is_valid_ip(address: str) -> bool:
     except ValueError:
         return False
 
-def parse_target(target_input: str, mode: str = "Standard Recon", source: str = "cli") -> ReconTarget:
+def parse_target(target_input: str, mode: str = "Standard Recon", depth: str = "Common", source: str = "cli") -> ReconTarget:
     """
     Parses a string into a normalized ReconTarget.
     Supports both explicit IPs and URLs.
@@ -29,6 +29,7 @@ def parse_target(target_input: str, mode: str = "Standard Recon", source: str = 
             port=None,
             url=None,
             mode=mode,
+            depth=depth,
             source=source
         )
 
@@ -60,15 +61,11 @@ def parse_target(target_input: str, mode: str = "Standard Recon", source: str = 
             port=port,
             url=f"{scheme}://{hostname}:{port}" if port else input_str,
             mode=mode,
+            depth=depth,
             source=source
         )
 
-    # 3. Fallback (invalid or just hostname without scheme)
-    # We will treat it as URL with missing scheme, defaulting to http for parsing purposes,
-    # but the requirement states "URL MODE: If the user selects 2... ask Enter URL... http://10.48.159.132".
-    # For now, let's treat bare hostnames as URL targets with no scheme/port defined unless we assume HTTP.
-
-    # We assume it's an IP that failed validation or a bare domain name
+    # 3. Fallback
     return ReconTarget(
         input=input_str,
         target_type="unknown",
@@ -78,5 +75,7 @@ def parse_target(target_input: str, mode: str = "Standard Recon", source: str = 
         port=None,
         url=None,
         mode=mode,
+        depth=depth,
         source=source
     )
+

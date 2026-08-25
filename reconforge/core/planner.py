@@ -22,7 +22,10 @@ class ReconPlanner:
             if target.scheme == "https":
                 modules.append("TLS Analysis")
 
-        # 2. WAF-Aware Constraints
+        # 2. Recon Depth & WAF-Aware Constraints
+        depth = getattr(target, "depth", "Common")
+        metadata["depth"] = depth
+
         if target.mode == "WAF-Aware Low-Impact Recon":
             metadata["respect_rate_limits"] = True
             metadata["respect_retry_after"] = True
@@ -36,7 +39,9 @@ class ReconPlanner:
         return ReconPlan(
             mode=target.mode,
             target=target,
+            depth=depth,
             modules=modules,
             output_directory=self.output_directory,
             metadata=metadata
         )
+

@@ -19,15 +19,20 @@ def interactive_menu():
         from rich.console import Console
         from rich.panel import Panel
         console = Console()
-        console.print(Panel(f"      RECONFORGE v{__version__}", expand=False, style="bold blue"))
+        console.print(Panel("╔══════════════════════════════════════╗\n║            RECONFORGE                ║\n║      Fast Adaptive Recon Engine      ║\n╚══════════════════════════════════════╝", expand=False, style="bold blue"))
         print()
 
-        print("Select reconnaissance mode:\n")
+        target_input = input("Target:\n> ").strip()
+        if not target_input:
+            print("[!] Target cannot be empty.")
+            sys.exit(1)
+
+        print("\nRecon Mode:\n")
         print("1. Standard Recon")
         print("2. WAF-Aware Low-Impact Recon\n")
 
         while True:
-            mode_opt = input("Select option [1-2]: ").strip()
+            mode_opt = input("Select mode: ").strip()
             if mode_opt == "1":
                 mode = "Standard Recon"
                 break
@@ -37,62 +42,26 @@ def interactive_menu():
             else:
                 print("[!] Invalid option. Please select 1 or 2.")
 
-        print("\nSelect target type:\n")
-        print("1. IP Address")
-        print("2. URL\n")
+        print("\nRecon Depth:\n")
+        print("1. Common")
+        print("2. Medium")
+        print("3. Deep\n")
 
         while True:
-            target_opt = input("Select option [1-2]: ").strip()
-            if target_opt in ["1", "2"]:
+            depth_opt = input("Select depth: ").strip()
+            if depth_opt == "1":
+                depth = "Common"
+                break
+            elif depth_opt == "2":
+                depth = "Medium"
+                break
+            elif depth_opt == "3":
+                depth = "Deep"
                 break
             else:
-                print("[!] Invalid option. Please select 1 or 2.")
+                print("[!] Invalid option. Please select 1, 2, or 3.")
 
-        if target_opt == "1":
-            target_input = input("\nEnter IP address: ").strip()
-            target = parse_target(target_input, mode=mode, source="interactive")
-
-        elif target_opt == "2":
-            target_input = input("\nEnter URL: ").strip()
-
-            print("\nSelect port mode:\n")
-            print("1. Default Port")
-            print("2. Custom Port\n")
-
-            while True:
-                port_opt = input("Select option [1-2]: ").strip()
-                if port_opt in ["1", "2"]:
-                    break
-                else:
-                    print("[!] Invalid option. Please select 1 or 2.")
-
-            if port_opt == "2":
-                while True:
-                    port_str = input("\nEnter port: ").strip()
-                    if port_str.isdigit() and 1 <= int(port_str) <= 65535:
-                        port = int(port_str)
-                        break
-                    else:
-                        print("[!] Invalid port. Please enter 1-65535.")
-
-                target = parse_target(target_input, mode=mode, source="interactive")
-                target.port = port
-                target.url = f"{target.scheme}://{target.hostname or target.ip}:{port}"
-            else:
-                target = parse_target(target_input, mode=mode, source="interactive")
-                # Ensure we have the default port
-                if not target.port:
-                    if target.scheme == "https":
-                        target.port = 443
-                    else:
-                        target.port = 80
-                        # update scheme and url if it was bare
-                        if not target.scheme:
-                            target.scheme = "http"
-                        target.url = f"{target.scheme}://{target.hostname or target.ip}:{target.port}"
-
-                print(f"[*] Using default port: {target.port}")
-
+        target = parse_target(target_input, mode=mode, depth=depth, source="interactive")
         return target
     except KeyboardInterrupt:
         print("\n\n[!] ReconForge interactive menu cancelled by user. Exiting.")
@@ -123,8 +92,10 @@ def main():
     # Global arguments
     parser.add_argument("-u", "--url", help="URL target")
     parser.add_argument("--mode", choices=["standard", "low-impact"], help="Reconnaissance mode")
+    parser.add_argument("--depth", choices=["common", "medium", "deep"], default="common", help="Reconnaissance depth")
     parser.add_argument("--plan", action="store_true", help="Only plan the execution")
     parser.add_argument("--execute", action="store_true", help="Execute the planned tools")
+
 
     # We will only add subparsers if the command is actually one of the subparser commands
     # Otherwise argparse will throw an invalid choice error on IPs like 10.0.0.1
@@ -283,7 +254,16 @@ def main():
             if args.mode == "low-impact":
                 mode = "WAF-Aware Low-Impact Recon"
 
-            recon_target = parse_target(target_str, mode=mode, source="cli")
+            depth = "Common"
+            if getattr(args, "depth", None):
+                d_val = args.depth.lower()
+                if d_val == "medium":
+                    depth = "Medium"
+                elif d_val == "deep":
+                    depth = "Deep"
+
+            recon_target = parse_target(target_str, mode=mode, depth=depth, source="cli")
+
 
         planner = ReconPlanner()
         plan = planner.plan(recon_target)

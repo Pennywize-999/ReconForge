@@ -12,8 +12,10 @@ fi
 
 echo "[*] Creating virtual environment in /opt/reconforge..."
 sudo mkdir -p /opt/reconforge
-sudo chown $USER:$USER /opt/reconforge
-python3 -m venv /opt/reconforge/venv
+sudo chown -R $USER:$USER /opt/reconforge
+if [ ! -d "/opt/reconforge/venv" ]; then
+    python3 -m venv /opt/reconforge/venv
+fi
 
 echo "[*] Installing requirements and package..."
 source /opt/reconforge/venv/bin/activate
@@ -23,3 +25,4 @@ echo "[*] Creating symlink in /usr/local/bin/reconforge..."
 sudo ln -sf /opt/reconforge/venv/bin/reconforge /usr/local/bin/reconforge
 
 echo "[+] Installation complete! You can now run 'reconforge'"
+

@@ -308,12 +308,15 @@ class ReconTarget:
     port: Optional[int] = None
     url: Optional[str] = None
     mode: str = "Standard Recon"
+    depth: str = "Common"
     source: str = "interactive"
 
 @dataclass
 class ReconPlan:
     mode: str
     target: ReconTarget
+    depth: str = "Common"
     modules: List[str] = field(default_factory=list)
     output_directory: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
+
