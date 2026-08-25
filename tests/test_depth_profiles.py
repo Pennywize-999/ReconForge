@@ -56,6 +56,46 @@ def test_gobuster_depth_arguments():
         assert "-x" in plan_deep.arguments
         assert "php,html,txt,json,xml,bak,zip" in plan_deep.arguments
 
+def test_all_six_mode_depth_combinations():
+    adapter_nmap = NmapAdapter()
+    adapter_gobuster = GobusterAdapter()
+    planner = ReconPlanner()
+
+    combos = [
+        ("Standard Recon", "Common"),
+        ("Standard Recon", "Medium"),
+        ("Standard Recon", "Deep"),
+        ("WAF-Aware Low-Impact Recon", "Common"),
+        ("WAF-Aware Low-Impact Recon", "Medium"),
+        ("WAF-Aware Low-Impact Recon", "Deep"),
+    ]
+
+    for mode, depth in combos:
+        target = parse_target("10.0.2.14", mode=mode, depth=depth)
+        plan = planner.plan(target)
+
+        assert plan.mode == mode
+        assert plan.depth == depth
+        assert plan.metadata.get("depth") == depth
+
+        nmap_plan = adapter_nmap.build_plan(target, "scratch/tmp")
+        if depth == "Common":
+            assert "-sV" in nmap_plan.arguments
+            assert "-p-" not in nmap_plan.arguments
+        elif depth == "Medium":
+            assert "-sC" in nmap_plan.arguments
+            assert "-p-" not in nmap_plan.arguments
+        elif depth == "Deep":
+            assert "-p-" in nmap_plan.arguments
+            assert "-sC" in nmap_plan.arguments
+
+        if mode == "WAF-Aware Low-Impact Recon":
+            assert "-T2" in nmap_plan.arguments
+            assert plan.metadata.get("respect_rate_limits") == True
+        else:
+            assert "-T2" not in nmap_plan.arguments
+            assert plan.metadata.get("respect_rate_limits") == False
+
 def test_whatweb_depth_aggression():
     adapter = WhatWebAdapter()
 
@@ -66,3 +106,4 @@ def test_whatweb_depth_aggression():
     t_medium = parse_target("http://10.0.2.14", depth="Medium")
     plan_med = adapter.build_plan(t_medium, "scratch/tmp")
     assert plan_med.arguments[1] == "3"
+
