@@ -311,6 +311,10 @@ class ReconTarget:
     depth: str = "Common"
     source: str = "interactive"
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ReconTarget":
+        return cls(**data)
+
 @dataclass
 class ReconPlan:
     mode: str
@@ -319,4 +323,12 @@ class ReconPlan:
     modules: List[str] = field(default_factory=list)
     output_directory: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ReconPlan":
+        d = dict(data)
+        if "target" in d and isinstance(d["target"], dict):
+            d["target"] = ReconTarget.from_dict(d["target"])
+        return cls(**d)
+
 

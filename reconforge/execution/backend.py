@@ -119,19 +119,23 @@ class RealExecutionBackend(ExecutionBackend):
                     is_web = False
                     scheme = "http"
 
-                    if port.number in [80, 8080]:
+                    if port.number in [80, 8080, 8000, 8081]:
                         is_web = True
                         scheme = "http"
-                    elif port.number in [443, 8443]:
+                    elif port.number in [443, 8443, 9443]:
                         is_web = True
                         scheme = "https"
                     elif port.service:
-                        s_name = port.service.name.lower() if port.service.name else ""
-                        s_prod = port.service.product.lower() if port.service.product else ""
-                        if "http" in s_name or "www" in s_name or "http" in s_prod or "www" in s_prod:
+                        s_name = (port.service.name or "").lower()
+                        s_prod = (port.service.product or "").lower()
+                        s_cpe = (port.service.cpe or "").lower()
+
+                        web_keywords = ["http", "www", "web", "nginx", "apache", "lighttpd", "express", "jetty", "tomcat", "gunicorn", "uvicorn", "iis"]
+                        if any(kw in s_name or kw in s_prod or kw in s_cpe for kw in web_keywords):
                             is_web = True
-                            if "ssl" in s_name or "https" in s_name or "ssl" in s_prod or "https" in s_prod:
+                            if any(sec in s_name or sec in s_prod or sec in s_cpe for sec in ["ssl", "https", "tls"]):
                                 scheme = "https"
+
 
                     if is_web:
                         url = f"{scheme}://{host.ip}:{port.number}"
