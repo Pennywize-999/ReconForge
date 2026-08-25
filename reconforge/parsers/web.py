@@ -35,8 +35,8 @@ class GobusterParser(BaseParser):
         host = Host(ip="unknown", status="unknown")
         endpoints = []
 
-        # Regex to match: /path (Status: 200) [Size: 123] [--> /redirect]
-        pattern = re.compile(r'(/[\w\-\.\/]+)\s+\(Status:\s+(\d{3})\)(?:\s+\[Size:\s+(\d+)\])?(?:\s+\[-->\s+([^\]]+)\])?')
+        # Regex to match: /path (Status: 200) [Size: 123] [--> /redirect] or Found: /path ...
+        pattern = re.compile(r'(?:Found:\s+)?(/[\S]*?)\s+\(Status:\s+(\d{3})\)(?:\s+\[Size:\s+(\d+)\])?(?:\s+\[-->\s+([^\]]+)\])?')
 
         for line in content.splitlines():
             match = pattern.search(line)
@@ -59,10 +59,10 @@ class GobusterParser(BaseParser):
                 endpoint = WebEndpoint(
                     url=full_url,
                     path=path,
-                    status_code=status,
+                    status_codes=[status],
                     content_length=size,
                     redirect_location=redirect,
-                    source="gobuster",
+                    sources={str(status): ["gobuster"]},
                     category=category
                 )
                 endpoints.append(endpoint)
@@ -106,8 +106,10 @@ class DirbParser(BaseParser):
         host = Host(ip="unknown", status="unknown")
         endpoints = []
 
-        # Regex to match: + http://10.10.10.25/admin (CODE:200|SIZE:123)
+        # Regex to match standard DIRB line: + http://10.10.10.25/admin (CODE:200|SIZE:123)
         pattern = re.compile(r'\+\s+(http[s]?://\S+)\s+\(CODE:(\d+)\|SIZE:(\d+)\)')
+        # Regex to match DIRB directory line: ==> DIRECTORY: http://10.10.10.25/secret/
+        dir_pattern = re.compile(r'(?:==>|!)\s+DIRECTORY:\s+(http[s]?://\S+)')
 
         for line in content.splitlines():
             match = pattern.search(line)
@@ -130,10 +132,26 @@ class DirbParser(BaseParser):
                 endpoint = WebEndpoint(
                     url=full_url,
                     path=path,
-                    status_code=status,
+                    status_codes=[status],
                     content_length=size,
-                    source="dirb",
+                    sources={str(status): ["dirb"]},
                     category=category
+                )
+                endpoints.append(endpoint)
+                continue
+
+            dir_match = dir_pattern.search(line)
+            if dir_match:
+                full_url = dir_match.group(1)
+                parsed = urlparse(full_url)
+                path = parsed.path or "/"
+
+                endpoint = WebEndpoint(
+                    url=full_url,
+                    path=path,
+                    status_codes=[200],
+                    sources={"200": ["dirb"]},
+                    category="Directory"
                 )
                 endpoints.append(endpoint)
 

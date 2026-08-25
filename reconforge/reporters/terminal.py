@@ -98,47 +98,39 @@ class TerminalReporter:
         if not host.web_endpoints:
             return
 
-        has_http = False
-        for ep in host.web_endpoints:
-            if ep.status_code and ep.category != "Directory":
-                if not has_http:
-                    self.console.print("\n[bold cyan]HTTP[/bold cyan]")
-                    self.console.print("-" * 60)
-                    has_http = True
-                self.console.print(f"    URL: {ep.url}")
-                self.console.print(f"    Status: {ep.status_code}")
-                # We can print content type and server if they are in technologies
-                ct = next((t for t in ep.technologies if t.name == "Content-Type"), None)
-                if ct and ct.detected_values:
-                    self.console.print(f"    Content-Type: {ct.detected_values[0]}")
-                self.console.print("")
+    def _print_http_info(self, host: Host):
+        pass # Merged into directory enumeration below
 
     def _print_directory_enumeration(self, host: Host):
-        gobuster_paths = []
-        dirb_paths = []
+        if not host.web_endpoints:
+            return
 
-        for ep in host.web_endpoints:
-            if ep.category == "Directory":
-                if "Gobuster" in ep.source:
-                    gobuster_paths.append(ep)
-                elif "Dirb" in ep.source:
-                    dirb_paths.append(ep)
+        self.console.print("\n[bold cyan]DIRECTORY / HTTP ENUMERATION[/bold cyan]")
+        
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Path")
+        table.add_column("Status")
+        table.add_column("Sources")
+        table.add_column("Details")
 
-        if gobuster_paths or dirb_paths:
-            self.console.print("\n[bold cyan]DIRECTORY ENUMERATION[/bold cyan]")
-            self.console.print("-" * 60)
+        for ep in sorted(host.web_endpoints, key=lambda x: x.path):
+            statuses = ", ".join(str(s) for s in sorted(ep.status_codes))
+            
+            all_sources = set()
+            for s_list in ep.sources.values():
+                all_sources.update(s_list)
+            sources_str = ", ".join(sorted(list(all_sources)))
+            
+            details = ""
+            if ep.redirect_location:
+                details = f"--> {ep.redirect_location}"
+            elif ep.content_length is not None:
+                details = f"Size: {ep.content_length}"
 
-            if gobuster_paths:
-                self.console.print("    Gobuster:")
-                for ep in gobuster_paths:
-                    self.console.print(f"       {ep.path} (Status: {ep.status_code})")
-                self.console.print("")
+            table.add_row(ep.path, statuses, sources_str, details)
 
-            if dirb_paths:
-                self.console.print("    Dirb:")
-                for ep in dirb_paths:
-                    self.console.print(f"       {ep.path} (Status: {ep.status_code})")
-                self.console.print("")
+        self.console.print(table)
+        self.console.print("")
 
     def _print_tls_info(self, host: Host):
         has_tls = False

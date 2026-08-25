@@ -1,8 +1,19 @@
 import json
 import uuid
+import dataclasses
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
 from enum import Enum
+
+class SafeJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if dataclasses.is_dataclass(obj):
+            return dataclasses.asdict(obj)
+        if isinstance(obj, Enum):
+            return obj.value
+        if hasattr(obj, '__dict__'):
+            return obj.__dict__
+        return str(obj)
 
 class Confidence(Enum):
     CONFIRMED = "CONFIRMED"
@@ -113,17 +124,32 @@ class Technology:
 class WebEndpoint:
     url: str
     path: str
-    status_code: Optional[int]
+    status_codes: List[int] = field(default_factory=list)
     method: str = "GET"
     content_length: Optional[int] = None
     redirect_location: Optional[str] = None
-    source: str = ""
+    sources: Dict[str, List[str]] = field(default_factory=dict)
     category: str = "Accessible"
     technologies: List[Technology] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WebEndpoint":
         d = dict(data)
+        
+        # Migrate old format to new format
+        if "status_code" in d:
+            status = d.pop("status_code")
+            if status is not None and "status_codes" not in d:
+                d["status_codes"] = [status]
+        
+        if "source" in d:
+            source = d.pop("source")
+            if source and "sources" not in d:
+                if d.get("status_codes"):
+                    d["sources"] = {str(d["status_codes"][0]): [source]}
+                else:
+                    d["sources"] = {"unknown": [source]}
+
         if "technologies" in d:
             d["technologies"] = [Technology.from_dict(t) for t in d["technologies"]]
         return cls(**d)

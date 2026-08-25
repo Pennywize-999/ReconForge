@@ -44,7 +44,7 @@ def test_whatweb_parser():
     assert len(host.web_endpoints) == 1
 
     ep = host.web_endpoints[0]
-    assert ep.status_code == 200
+    assert ep.status_codes[0] == 200
     assert len(ep.technologies) > 0
 
 def test_tls_parser():

@@ -106,6 +106,31 @@ class Analyzer:
 
         return target
 
+    def _get_endpoint_context(self, ep: WebEndpoint):
+        path = ep.path or "/"
+        method = (ep.method or "GET").upper()
+        scheme = None
+        port = None
+        if "://" in ep.url:
+            parsed = urlparse(ep.url)
+            scheme = parsed.scheme
+            port = parsed.port
+            if not port and scheme:
+                port = 443 if scheme == "https" else 80
+        return scheme, port, path, method
+
+    def _are_endpoints_equivalent(self, ep1: WebEndpoint, ep2: WebEndpoint) -> bool:
+        s1, p1, path1, m1 = self._get_endpoint_context(ep1)
+        s2, p2, path2, m2 = self._get_endpoint_context(ep2)
+
+        if path1 != path2 or m1 != m2:
+            return False
+
+        if s1 is not None and s2 is not None and p1 is not None and p2 is not None:
+            return (s1 == s2) and (p1 == p2)
+
+        return True
+
     def _merge_host(self, target: Target, new_host: Host):
         # 1. Host Correlation
         existing_host = None
@@ -128,9 +153,11 @@ class Analyzer:
         if existing_host:
             # Upgrade IP if unknown
             if existing_host.ip == "unknown" and new_host.ip != "unknown":
-                target.hosts[new_host.ip] = existing_host
-                del target.hosts["unknown"]
+                old_key = next((k for k, h in target.hosts.items() if h is existing_host), None)
+                if old_key:
+                    del target.hosts[old_key]
                 existing_host.ip = new_host.ip
+                target.hosts[new_host.ip] = existing_host
 
             if new_host.status != "unknown":
                 existing_host.status = new_host.status
@@ -158,16 +185,60 @@ class Analyzer:
                     if new_port.service and not matched_port.service:
                         matched_port.service = new_port.service
                     elif new_port.service and matched_port.service:
+                        if new_port.service.product and not matched_port.service.product:
+                            matched_port.service.product = new_port.service.product
+                        if new_port.service.version and not matched_port.service.version:
+                            matched_port.service.version = new_port.service.version
+                        if new_port.service.cpe and not matched_port.service.cpe:
+                            matched_port.service.cpe = new_port.service.cpe
                         self._merge_technologies(matched_port.service.technologies, new_port.service.technologies)
                 else:
                     existing_host.ports.append(new_port)
 
             # Web Endpoints (also correlate to ports)
             for new_endpoint in new_host.web_endpoints:
-                # Deduplicate endpoint
-                matched_ep = next((e for e in existing_host.web_endpoints if e.path == new_endpoint.path and e.status_code == new_endpoint.status_code), None)
+                # Normalize path without losing trailing slashes
+                if new_endpoint.path.startswith("http://") or new_endpoint.path.startswith("https://"):
+                    new_endpoint.path = urlparse(new_endpoint.path).path
+                
+                if not new_endpoint.path:
+                    new_endpoint.path = "/"
+
+                # Deduplicate endpoint by context-aware identity strategy
+                matched_ep = None
+                for ep in existing_host.web_endpoints:
+                    if self._are_endpoints_equivalent(ep, new_endpoint):
+                        matched_ep = ep
+                        break
+
                 if matched_ep:
                     self._merge_technologies(matched_ep.technologies, new_endpoint.technologies)
+                    
+                    if not matched_ep.redirect_location and new_endpoint.redirect_location:
+                        matched_ep.redirect_location = new_endpoint.redirect_location
+
+                    if matched_ep.content_length is None and new_endpoint.content_length is not None:
+                        matched_ep.content_length = new_endpoint.content_length
+
+                    if matched_ep.category in ["Accessible", "Other"] and new_endpoint.category not in ["Accessible", "Other"]:
+                        matched_ep.category = new_endpoint.category
+
+                    if ("://" not in matched_ep.url) and ("://" in new_endpoint.url):
+                        matched_ep.url = new_endpoint.url
+
+                    # Merge status codes and sources
+                    for status_code in new_endpoint.status_codes:
+                        status_str = str(status_code)
+                        if status_code not in matched_ep.status_codes:
+                            matched_ep.status_codes.append(status_code)
+                            
+                        if status_str not in matched_ep.sources:
+                            matched_ep.sources[status_str] = []
+                            
+                        new_sources = new_endpoint.sources.get(status_str, [])
+                        for ns in new_sources:
+                            if ns not in matched_ep.sources[status_str]:
+                                matched_ep.sources[status_str].append(ns)
                 else:
                     existing_host.web_endpoints.append(new_endpoint)
 

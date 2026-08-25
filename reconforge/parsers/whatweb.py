@@ -50,12 +50,8 @@ class WhatWebParser(BaseParser):
             status_match = re.match(r'(\d{3})', parts[1])
             status_code = int(status_match.group(1)) if status_match else None
 
-            endpoint = WebEndpoint(
-                url=url,
-                path=parsed_url.path or "/",
-                status_code=status_code,
-                source=os.path.basename(file_path)
-            )
+            path = parsed_url.path or "/"
+            techs = []
 
             # Parse plugins
             plugins_raw = parts[1][parts[1].find("]") + 1:].strip()
@@ -74,8 +70,10 @@ class WhatWebParser(BaseParser):
 
                     version = None
                     if details:
-                        # Sometimes details is just a version, sometimes it's more complex
-                        if re.match(r'^[0-9\.]+$', details):
+                        ver_match = re.search(r'\b\d+(?:\.\d+)+\b', details)
+                        if ver_match:
+                            version = ver_match.group(0)
+                        elif re.match(r'^[0-9\.]+$', details):
                             version = details
 
                     tech = Technology(
@@ -85,7 +83,15 @@ class WhatWebParser(BaseParser):
                         detected_values=[p],
                         confidence=Confidence.HIGH
                     )
-                    endpoint.technologies.append(tech)
+                    techs.append(tech)
+                    
+            endpoint = WebEndpoint(
+                url=url,
+                path=path,
+                status_codes=[status_code] if status_code else [],
+                sources={str(status_code): ["whatweb"]} if status_code else {},
+                technologies=techs
+            )
 
             host.web_endpoints.append(endpoint)
             hosts.append(host)

@@ -27,6 +27,8 @@ def execute_http_collector(plan: ToolExecutionPlan, config: Any):
             headers = response.getheaders()
 
             with open(output_file, "w", encoding="utf-8") as f:
+                path = urlparse(target_url).path or "/"
+                f.write(f"GET {path} HTTP/1.1\n")
                 f.write(f"HTTP/1.1 {status} OK\n")
                 for k, v in headers:
                     f.write(f"{k}: {v}\n")

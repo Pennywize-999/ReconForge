@@ -16,14 +16,11 @@ from reconforge.tools.registry import ToolRegistry
 
 def interactive_menu():
     try:
-        try:
-            print("â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®")
-            print(f"â”‚       RECONFORGE v{__version__:<14}â”‚")
-            print("â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯\n")
-        except UnicodeEncodeError:
-            print("-" * 32)
-            print(f"       RECONFORGE v{__version__}")
-            print("-" * 32 + "\n")
+        from rich.console import Console
+        from rich.panel import Panel
+        console = Console()
+        console.print(Panel(f"      RECONFORGE v{__version__}", expand=False, style="bold blue"))
+        print()
 
         print("Select reconnaissance mode:\n")
         print("1. Standard Recon")
@@ -272,20 +269,21 @@ def main():
             print_tools()
             sys.exit(0)
 
-    # ----------------------------------------------------
-    # LIVE RECONNAISSANCE PLANNING WORKFLOW
-    # ----------------------------------------------------
-
     target_str = args.url
     if not target_str and unknown:
         target_str = unknown[0]
 
-    if target_str:
-        mode = "Standard Recon"
-        if args.mode == "low-impact":
-            mode = "WAF-Aware Low-Impact Recon"
+    recon_target = None
+    if not has_command and not target_str:
+        recon_target = interactive_menu()
 
-        recon_target = parse_target(target_str, mode=mode, source="cli")
+    if target_str or recon_target:
+        if not recon_target:
+            mode = "Standard Recon"
+            if args.mode == "low-impact":
+                mode = "WAF-Aware Low-Impact Recon"
+
+            recon_target = parse_target(target_str, mode=mode, source="cli")
 
         planner = ReconPlanner()
         plan = planner.plan(recon_target)
@@ -298,17 +296,18 @@ def main():
         with open(plan_file, "w") as f:
             import json
             import dataclasses
-            json.dump(dataclasses.asdict(plan), f, indent=2)
+            from reconforge.core.models import SafeJSONEncoder
+            json.dump(plan, f, cls=SafeJSONEncoder, indent=2)
 
-        if getattr(args, "execute", False):
+        if getattr(args, "plan", False):
+            backend = PlanningOnlyBackend()
+        else:
             from reconforge.execution.backend import RealExecutionBackend
             backend = RealExecutionBackend()
-        else:
-            backend = PlanningOnlyBackend()
 
         result = backend.execute(plan)
 
-        if getattr(args, "execute", False) and result:
+        if not getattr(args, "plan", False) and result:
             from reconforge.reporters.terminal import TerminalReporter
             from reconforge.reporters.json_ext import JSONReporter
             from reconforge.reporters.html import HTMLReporter
@@ -330,15 +329,6 @@ def main():
             for ev in result.evidence:
                 print(f"  {ev.source_file}")
 
-        sys.exit(0)
-
-    if not has_command and not unknown and not args.url:
-        recon_target = interactive_menu()
-        planner = ReconPlanner()
-        plan = planner.plan(recon_target)
-
-        backend = PlanningOnlyBackend()
-        backend.execute(plan)
         sys.exit(0)
 
     parser.print_help()

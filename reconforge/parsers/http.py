@@ -33,6 +33,7 @@ class HTTPParser(BaseParser):
 
         host = Host(ip=ip_guess, status="up")
 
+        techs: List[Technology] = []
         server_match = re.search(r'(?i)^Server:\s*(.+)$', content, re.MULTILINE)
         if server_match:
             server_str = server_match.group(1).strip()
@@ -51,9 +52,7 @@ class HTTPParser(BaseParser):
                 detected_values=[server_str],
                 confidence=Confidence.HIGH
             )
-
-            # Since we don't have a port, we'll just add it as a general technology finding for the host
-            # Analyzer will need to handle this or we attach it to a generic WebEndpoint
+            techs.append(tech)
 
             finding = Finding(
                 title="HTTP Server Header Disclosed",
@@ -67,7 +66,59 @@ class HTTPParser(BaseParser):
             )
             host.findings.append(finding)
 
-        if host.findings:
+        # X-Powered-By header
+        powered_match = re.search(r'(?i)^X-Powered-By:\s*(.+)$', content, re.MULTILINE)
+        if powered_match:
+            p_str = powered_match.group(1).strip()
+            p_name = p_str.split()[0]
+            p_ver = p_name.split("/", 1)[1] if "/" in p_name else None
+            p_name = p_name.split("/", 1)[0]
+            techs.append(Technology(
+                name=p_name,
+                version=p_ver,
+                sources=[filename],
+                detected_values=[p_str],
+                confidence=Confidence.HIGH
+            ))
+            
+        # Parse path and status for WebEndpoint
+        # Ensure we don't treat HTTP methods like HEAD as paths
+        req_match = re.search(r'^(GET|POST|HEAD|PUT|DELETE|OPTIONS)\s+(/[^\s]*)\s+HTTP/1\.[01]', content, re.MULTILINE)
+        status_match = re.search(r'^HTTP/1\.[01]\s+(\d{3})', content, re.MULTILINE)
+        location_match = re.search(r'(?i)^Location:\s*(.+)$', content, re.MULTILINE)
+        
+        path = "/"
+        if req_match:
+            path = req_match.group(2)
+            
+        status_code = None
+        if status_match:
+            status_code = int(status_match.group(1))
+
+        redirect_loc = location_match.group(1).strip() if location_match else None
+            
+        if status_code:
+            from reconforge.core.models import WebEndpoint
+            category = "Accessible"
+            if status_code in [301, 302, 307, 308]:
+                category = "Redirect"
+            elif status_code in [401, 403]:
+                category = "Forbidden"
+            elif status_code == 404:
+                category = "Not Found"
+
+            endpoint = WebEndpoint(
+                url=f"http://{host.ip}{path}" if host.ip != "unknown" else path,
+                path=path,
+                status_codes=[status_code],
+                redirect_location=redirect_loc,
+                sources={str(status_code): ["http_collector"]},
+                category=category,
+                technologies=techs
+            )
+            host.web_endpoints.append(endpoint)
+
+        if host.findings or host.web_endpoints:
             hosts.append(host)
 
         return hosts, findings, errors

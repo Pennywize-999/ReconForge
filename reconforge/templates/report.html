@@ -68,12 +68,24 @@
             <tr>
                 <th>URL</th>
                 <th>Status</th>
+                <th>Sources</th>
                 <th>Category</th>
             </tr>
-            {% for ep in host.web_endpoints %}
+            {% for ep in host.web_endpoints | sort(attribute='path') %}
             <tr>
                 <td><a href="{{ ep.url }}" target="_blank">{{ ep.url }}</a></td>
-                <td>{{ ep.status_code or '???' }}</td>
+                <td>{{ ep.status_codes | sort | join(', ') if ep.status_codes else '???' }}</td>
+                <td>
+                    {% set ns = namespace(all_sources=[]) %}
+                    {% for src_list in ep.sources.values() %}
+                        {% for src in src_list %}
+                            {% if src not in ns.all_sources %}
+                                {% set _ = ns.all_sources.append(src) %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                    {{ ns.all_sources | sort | join(', ') }}
+                </td>
                 <td>{{ ep.category }}</td>
             </tr>
             {% endfor %}

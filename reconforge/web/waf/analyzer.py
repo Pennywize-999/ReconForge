@@ -10,49 +10,90 @@ class WAFAnalyzer:
             return None
 
         waf = WAFAnalysis()
+        status_counts = {}
+        indicators = []
+        rate_limiting = False
+        provider_detected = None
+        provider_confidence = Confidence.UNKNOWN
 
-        # 1. Analyze HTTP Status Codes from Web Endpoints
+        # Analyze Endpoints for rate limiting / WAF signs
         for ep in host.web_endpoints:
-            if ep.status_code:
-                status_str = str(ep.status_code)
-                waf.status_counts[status_str] = waf.status_counts.get(status_str, 0) + 1
+            for code in ep.status_codes:
+                status_str = str(code)
+                status_counts[status_str] = status_counts.get(status_str, 0) + 1
+                
+                if code == 429:
+                    rate_limiting = True
+                    indicators.append("HTTP 429 Too Many Requests observed")
+                elif code in [403, 401]:
+                    indicators.append(f"HTTP {code} Access Denied on {ep.path}")
 
-                # Check for rate limiting
-                if ep.status_code == 429:
-                    waf.rate_limiting = True
-                    waf.detected = True
-                    waf.confidence = Confidence.MEDIUM
-                    waf.indicators.append("HTTP 429 Too Many Requests observed")
+        # Check Technologies for WAF Providers
+        waf_providers = ["cloudflare", "incapsula", "akamai", "aws web application firewall", "sucuri"]
+        
+        # Check endpoints
+        for ep in host.web_endpoints:
+            for tech in ep.technologies:
+                name_lower = tech.name.lower()
+                for provider in waf_providers:
+                    if provider in name_lower or provider in " ".join(tech.detected_values).lower():
+                        provider_detected = tech.name.title() if tech.name.islower() else tech.name
+                        provider_confidence = Confidence.HIGH
+                        indicators.append(f"WAF Provider '{tech.name}' identified via technology fingerprint")
+                        break
+                if provider_detected:
+                    break
+            if provider_detected:
+                break
+                
+        # Also check findings for WAF signatures in headers
+        if not provider_detected:
+            for finding in host.findings:
+                if finding.source_type in ["HTTPParser", "WhatWebParser", "HTTP Headers", "WhatWeb"]:
+                    for ev in finding.evidence:
+                        content_lower = ev.content.lower()
+                        for provider in waf_providers:
+                            if provider in content_lower:
+                                provider_detected = provider.capitalize()
+                                provider_confidence = Confidence.HIGH
+                                indicators.append(f"WAF Provider '{provider_detected}' identified in {finding.source_type} evidence")
+                                break
+                        if provider_detected:
+                            break
+                if provider_detected:
+                    break
 
-        # 2. Analyze Findings Evidence for Headers/Bodies
-        for finding in host.findings:
-            if finding.source_type in ["HTTPParser", "WhatWebParser", "HTTP Headers", "WhatWeb"]:
-                for ev in finding.evidence:
-                    self._analyze_evidence(waf, ev)
-
-        # 3. Analyze WebEndpoint raw paths/categories (like 403s)
-        if waf.status_counts.get("403", 0) > 10:
-            waf.indicators.append(f"High number of HTTP 403 responses ({waf.status_counts['403']})")
+        # Heuristics for detection
+        # If we have strong provider ID or explicit 429 rate limiting, WAF is confirmed/high
+        if provider_detected:
             waf.detected = True
-            if waf.confidence == Confidence.UNKNOWN:
-                waf.confidence = Confidence.LOW
+            waf.confidence = Confidence.HIGH
+            waf.provider = provider_detected
+            waf.provider_confidence = provider_confidence
+        elif rate_limiting:
+            waf.detected = True
+            waf.confidence = Confidence.MEDIUM
+            indicators.append("Rate limiting suggests WAF/IPS presence")
+        elif status_counts.get("403", 0) > 10:
+            # 403 count alone does not confirm WAF, just suspicious
+            waf.detected = False
+            waf.confidence = Confidence.LOW
+            indicators.append("High volume of 403 Forbidden responses, but no definitive WAF signature")
+        else:
+            waf.detected = False
+            waf.confidence = Confidence.INFO
 
-        # 4. Generate Low Impact Profile if we detected blocking or rate limiting
+        waf.indicators = indicators
+        waf.status_counts = status_counts
+        waf.rate_limiting = rate_limiting
+        
         if waf.rate_limiting or waf.status_counts.get("403", 0) > 0:
             waf.low_impact_profile = LowImpactProfile()
 
-        if waf.detected or waf.indicators:
-            waf.detected = True
-            if waf.confidence == Confidence.UNKNOWN:
-                waf.confidence = Confidence.LOW
+        if not waf.detected and not waf.indicators:
+            return None
 
-            # If no provider is found but WAF is detected
-            if waf.detected and not waf.provider:
-                waf.provider = "Unknown Provider"
-
-            return waf
-
-        return None
+        return waf
 
     def _analyze_evidence(self, waf: WAFAnalysis, evidence: Evidence):
         """Analyzes a specific piece of evidence for WAF signatures."""

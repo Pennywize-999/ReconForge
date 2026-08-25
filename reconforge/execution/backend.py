@@ -166,7 +166,10 @@ class RealExecutionBackend(ExecutionBackend):
 
                     if tp.output_file and w_target.port:
                         base, ext = os.path.splitext(tp.output_file)
-                        tp.output_file = f"{base}_{w_target.port}{ext}"
+                        if w_target.ip:
+                            tp.output_file = f"{base}_{w_target.ip}_{w_target.port}{ext}"
+                        else:
+                            tp.output_file = f"{base}_{w_target.port}{ext}"
                         for i, arg in enumerate(tp.arguments):
                             if arg == base + ext:
                                 tp.arguments[i] = tp.output_file
