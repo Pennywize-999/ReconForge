@@ -107,6 +107,31 @@ class ToolRegistry:
             executable="tls_collector"
         ))
 
+        self.register(ToolDefinition(
+
+            name="smb_collector",
+            category="Services",
+            description="Safe SMB Information Collector",
+            supported_target_types=["ip", "hostname"],
+            supported_protocols=["smb"],
+            input_requirements="IP or hostname",
+            output_format="text",
+            parser_name="SMBParser",
+            executable="smb_collector"
+        ))
+
+        self.register(ToolDefinition(
+            name="dns_collector",
+            category="Services",
+            description="Safe DNS Information Collector",
+            supported_target_types=["ip", "hostname"],
+            supported_protocols=["dns"],
+            input_requirements="IP or hostname",
+            output_format="text",
+            parser_name="DNSParser",
+            executable="dns_collector"
+        ))
+
     def register(self, tool: ToolDefinition):
         self.tools[tool.name] = tool
 
@@ -114,12 +139,13 @@ class ToolRegistry:
         return self.tools.get(name)
 
     def is_installed(self, tool_name: str) -> bool:
-        if tool_name in ["http_collector", "tls_collector"]:
+        if tool_name in ["http_collector", "tls_collector", "smb_collector", "dns_collector"]:
             return True
         tool = self.get_tool(tool_name)
         if not tool:
             return False
         return shutil.which(tool.executable) is not None
+
 
     def get_tools_by_category(self) -> Dict[str, List[ToolDefinition]]:
         categories = {}

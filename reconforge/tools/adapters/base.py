@@ -13,9 +13,15 @@ class ToolAdapter(ABC):
         pass
 
     @property
+    def capability_name(self) -> str:
+        """Returns the high-level ReconForge capability name for UI display."""
+        return self.tool_name
+
+    @property
     @abstractmethod
     def parser_name(self) -> str:
         pass
+
 
     @abstractmethod
     def supports_target(self, target: ReconTarget) -> bool:

@@ -5,39 +5,31 @@ from reconforge.core.models import ReconTarget
 from reconforge.tools.models import ToolExecutionPlan
 from reconforge.tools.adapters.base import ToolAdapter
 
-class WhatWebAdapter(ToolAdapter):
+class SmbAdapter(ToolAdapter):
     @property
     def tool_name(self) -> str:
-        return "whatweb"
+        return "smb_collector"
 
     @property
     def capability_name(self) -> str:
-        return "Technology Identification"
-
+        return "SMB Share Enumeration"
 
     @property
     def parser_name(self) -> str:
-        return "WhatWebParser"
+        return "SMBParser"
 
     def supports_target(self, target: ReconTarget) -> bool:
-        return target.scheme in ["http", "https"]
+        if target.port in [139, 445]:
+            return True
+        if target.scheme and "smb" in target.scheme.lower():
+            return True
+        return False
 
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> ToolExecutionPlan:
-        output_file = os.path.join(output_dir, f"{self.tool_name}.txt")
-        depth = getattr(target, "depth", "Common")
-
-        aggression = "1"
-        if depth == "Medium":
-            aggression = "3"
-        elif depth == "Deep":
-            aggression = "3"
-
-        args = ["-a", aggression, target.url, "--log-brief", output_file]
-
+        output_file = os.path.join(output_dir, f"smb_{target.ip or target.hostname}.txt")
         return ToolExecutionPlan(
             tool=self.tool_name,
             target=target.input,
-            arguments=args,
+            arguments=[target.ip or target.hostname],
             output_file=output_file
         )
-

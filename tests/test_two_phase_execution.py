@@ -114,3 +114,34 @@ def test_web_service_detection(mock_analyze, mock_execute, tmp_path):
     # Ensure non-web ports are not scanned
     assert not any("127.0.0.1:22" in url for url in urls_scanned)
     assert not any("127.0.0.1:25" in url for url in urls_scanned)
+
+@patch("reconforge.execution.executor.ToolExecutor.execute")
+@patch("reconforge.core.analyzer.Analyzer.analyze_directory")
+def test_smb_and_dns_service_routing(mock_analyze, mock_execute, tmp_path):
+    target = parse_target("127.0.0.1")
+    planner = ReconPlanner()
+    plan = planner.plan(target)
+    plan.output_directory = str(tmp_path)
+
+    analyzed_target = Target()
+    host = Host(ip="127.0.0.1", status="up")
+    host.ports.append(Port(number=445, protocol="tcp", state="open", service=Service(name="microsoft-ds")))
+    host.ports.append(Port(number=53, protocol="udp", state="open", service=Service(name="domain")))
+    analyzed_target.hosts["127.0.0.1"] = host
+    mock_analyze.return_value = analyzed_target
+
+    from reconforge.execution.executor import ToolExecutionResult
+    mock_execute.return_value = ToolExecutionResult(
+        tool="mocked", target="mocked", arguments=[], output_file="",
+        return_code=0, stdout="", stderr="", started_at="", finished_at="",
+        duration=0.0, success=True, timed_out=False, error=""
+    )
+
+    backend = RealExecutionBackend()
+    with patch("reconforge.tools.registry.ToolRegistry.is_installed", return_value=True):
+        backend.execute(plan)
+
+    tools_called = [call.args[0].tool for call in mock_execute.call_args_list]
+    assert "smb_collector" in tools_called
+    assert "dns_collector" in tools_called
+

@@ -27,7 +27,9 @@ def test_nmap_depth_arguments():
     
     t_common = parse_target("10.0.2.14", depth="Common")
     plan_common = adapter.build_plan(t_common, "scratch/tmp")
-    assert "-F" in plan_common.arguments
+    assert "-sV" in plan_common.arguments
+    assert "-F" not in plan_common.arguments
+
 
     t_medium = parse_target("10.0.2.14", depth="Medium")
     plan_medium = adapter.build_plan(t_medium, "scratch/tmp")

@@ -303,13 +303,13 @@ def main():
             html_path = os.path.join(plan.output_directory, "report.html")
             html_rep.report(result, html_path)
 
-            print("\nEVIDENCE & REPORTS")
-            print(f"  {json_path}")
-            print(f"  {html_path}")
-            for ev in result.evidence:
-                print(f"  {ev.source_file}")
+            print("\nREPORTS & EVIDENCE SUMMARY")
+            print(f"  JSON Report: {json_path}")
+            print(f"  HTML Report: {html_path}")
+            print(f"  Evidence items saved: {len(result.evidence)}")
 
         sys.exit(0)
+
 
     parser.print_help()
 

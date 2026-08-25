@@ -11,6 +11,11 @@ class TlsCollectorAdapter(ToolAdapter):
         return "tls_collector"
 
     @property
+    def capability_name(self) -> str:
+        return "TLS Certificate Inspection"
+
+
+    @property
     def parser_name(self) -> str:
         return "TLSParser"
 

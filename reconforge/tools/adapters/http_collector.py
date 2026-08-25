@@ -11,6 +11,11 @@ class HttpCollectorAdapter(ToolAdapter):
         return "http_collector"
 
     @property
+    def capability_name(self) -> str:
+        return "HTTP Response Analysis"
+
+
+    @property
     def parser_name(self) -> str:
         return "HTTPParser"
 

@@ -5,39 +5,31 @@ from reconforge.core.models import ReconTarget
 from reconforge.tools.models import ToolExecutionPlan
 from reconforge.tools.adapters.base import ToolAdapter
 
-class WhatWebAdapter(ToolAdapter):
+class DnsAdapter(ToolAdapter):
     @property
     def tool_name(self) -> str:
-        return "whatweb"
+        return "dns_collector"
 
     @property
     def capability_name(self) -> str:
-        return "Technology Identification"
-
+        return "DNS Record Analysis"
 
     @property
     def parser_name(self) -> str:
-        return "WhatWebParser"
+        return "DNSParser"
 
     def supports_target(self, target: ReconTarget) -> bool:
-        return target.scheme in ["http", "https"]
+        if target.port == 53:
+            return True
+        if target.scheme and "dns" in target.scheme.lower():
+            return True
+        return False
 
     def build_plan(self, target: ReconTarget, output_dir: str, **kwargs: Any) -> ToolExecutionPlan:
-        output_file = os.path.join(output_dir, f"{self.tool_name}.txt")
-        depth = getattr(target, "depth", "Common")
-
-        aggression = "1"
-        if depth == "Medium":
-            aggression = "3"
-        elif depth == "Deep":
-            aggression = "3"
-
-        args = ["-a", aggression, target.url, "--log-brief", output_file]
-
+        output_file = os.path.join(output_dir, f"dns_{target.hostname or target.ip}.txt")
         return ToolExecutionPlan(
             tool=self.tool_name,
             target=target.input,
-            arguments=args,
+            arguments=[target.hostname or target.ip],
             output_file=output_file
         )
-

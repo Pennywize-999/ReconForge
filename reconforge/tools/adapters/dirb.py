@@ -12,6 +12,11 @@ class DirbAdapter(ToolAdapter):
         return "dirb"
 
     @property
+    def capability_name(self) -> str:
+        return "Web Content Discovery"
+
+
+    @property
     def parser_name(self) -> str:
         return "DirbParser"
 

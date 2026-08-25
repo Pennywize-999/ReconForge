@@ -150,7 +150,7 @@ class TerminalReporter:
         waf = host.waf_analysis
         self.console.print("\n[bold cyan]WAF / CDN ANALYSIS[/bold cyan]")
         self.console.print("-" * 60)
-        self.console.print(f"Detection:       {'[red]Possible[/red]' if waf.detected else 'None'}")
+        self.console.print(f"Detection:       {'[yellow]Detected[/yellow]' if waf.detected else 'None'}")
         if waf.provider:
             self.console.print(f"Provider:        {waf.provider} (Confidence: {waf.provider_confidence.value})")
         self.console.print(f"Confidence:      {waf.confidence.value}")
@@ -159,10 +159,7 @@ class TerminalReporter:
         for status, count in waf.status_counts.items():
             if status in ["403", "429"]:
                 self.console.print(f"HTTP {status}:        {count}")
-        if waf.low_impact_profile:
-            self.console.print("\n[bold]LOW-IMPACT PROFILE RECOMMENDED[/bold]")
-            self.console.print("Request policy:  Conservative")
-            self.console.print("Respect Retry-After: Yes")
+
 
     def _print_findings(self, host: Host):
         display_findings = [f for f in host.findings if f.finding_type != FindingType.VULNERABILITY and f.source_type != "TLSParser"]
@@ -199,17 +196,29 @@ class TerminalReporter:
     def _print_execution_section(self, target: Target):
         if not target.execution:
             return
-        self.console.print("\n[bold cyan]EXECUTION[/bold cyan]")
+        self.console.print("\n[bold cyan]EXECUTION SUMMARY[/bold cyan]")
         self.console.print("-" * 60)
+        capability_map = {
+            "nmap": "Network Service Discovery",
+            "gobuster": "Web Path Enumeration",
+            "dirb": "Web Content Discovery",
+            "whatweb": "Technology Identification",
+            "http_collector": "HTTP Response Analysis",
+            "tls_collector": "TLS Certificate Inspection",
+            "smb_collector": "SMB Share Enumeration",
+            "dns_collector": "DNS Record Analysis"
+        }
         for exec_info in target.execution:
             tool = exec_info.get("tool", "unknown")
+            cap = capability_map.get(tool, tool)
             success = exec_info.get("success", False)
             if success:
-                self.console.print(f"    {tool}: success")
+                self.console.print(f"    {cap}: Completed")
             elif exec_info.get("timed_out"):
-                self.console.print(f"    {tool}: timed_out")
+                self.console.print(f"    {cap}: Timed Out")
             else:
-                self.console.print(f"    {tool}: failed")
+                self.console.print(f"    {cap}: Failed")
+
 
     def _print_evidence_section(self, target: Target):
         self.console.print("\n[bold cyan]SESSION EVIDENCE[/bold cyan]")

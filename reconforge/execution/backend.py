@@ -78,10 +78,13 @@ class RealExecutionBackend(ExecutionBackend):
         from reconforge.tools.adapters.dirb import DirbAdapter
         from reconforge.tools.adapters.http_collector import HttpCollectorAdapter
         from reconforge.tools.adapters.tls_collector import TlsCollectorAdapter
+        from reconforge.tools.adapters.smb import SmbAdapter
+        from reconforge.tools.adapters.dns import DnsAdapter
 
         self.console = Console()
         self.registry = ToolRegistry()
         self.web_adapters = [GobusterAdapter(), WhatWebAdapter(), DirbAdapter(), HttpCollectorAdapter(), TlsCollectorAdapter()]
+        self.service_adapters = [SmbAdapter(), DnsAdapter()]
 
         from reconforge.execution.executor import ToolExecutor
         from reconforge.core.analyzer import Analyzer
@@ -99,18 +102,19 @@ class RealExecutionBackend(ExecutionBackend):
             tp = nmap_adapter.build_plan(plan.target, plan.output_directory)
 
             if not self.registry.is_installed(tp.tool):
-                self.console.print(f"[-] {tp.tool}: Executable not found")
+                self.console.print(f"[-] {nmap_adapter.capability_name}: Required component unavailable")
                 results.append(self._create_skipped(tp.tool, plan.target.input, tp.arguments, "Executable not found"))
             else:
-                self.console.print(f"[*] Running {tp.tool}...")
+                self.console.print(f"[*] {nmap_adapter.capability_name} in progress...")
                 result = self.executor.execute(tp)
                 results.append(result)
-                self._print_result(tp.tool, result)
+                self._print_result(nmap_adapter.capability_name, result)
 
             self.console.print("\n[bold cyan][2/4] Service analysis[/bold cyan]")
             analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
 
             web_targets = []
+            service_targets = []
             for ip, host in analyzed_target.hosts.items():
                 for port in host.ports:
                     if port.state != "open":
@@ -136,7 +140,6 @@ class RealExecutionBackend(ExecutionBackend):
                             if any(sec in s_name or sec in s_prod or sec in s_cpe for sec in ["ssl", "https", "tls"]):
                                 scheme = "https"
 
-
                     if is_web:
                         url = f"{scheme}://{host.ip}:{port.number}"
                         t = ReconTarget(
@@ -151,31 +154,51 @@ class RealExecutionBackend(ExecutionBackend):
                         )
                         web_targets.append(t)
 
+                    # Protocol specific non-web services
+                    if port.number in [139, 445] or (port.service and "smb" in (port.service.name or "").lower()):
+                        st = ReconTarget(
+                            input=host.ip,
+                            target_type="ip",
+                            ip=host.ip,
+                            port=port.number,
+                            scheme="smb",
+                            mode=plan.target.mode,
+                            depth=getattr(plan.target, "depth", "Common")
+                        )
+                        service_targets.append(st)
+                    elif port.number == 53 or (port.service and "dns" in (port.service.name or "").lower()):
+                        st = ReconTarget(
+                            input=host.ip,
+                            target_type="ip",
+                            ip=host.ip,
+                            hostname=host.hostnames[0] if host.hostnames else None,
+                            port=port.number,
+                            scheme="dns",
+                            mode=plan.target.mode,
+                            depth=getattr(plan.target, "depth", "Common")
+                        )
+                        service_targets.append(st)
+
             self.console.print("\n[bold cyan][3/4] Adaptive enumeration[/bold cyan]")
-            if not web_targets:
-                self.console.print("  No web services discovered for follow-up enumeration.")
+            if not web_targets and not service_targets:
+                self.console.print("  No active services identified for follow-up enumeration.")
 
         else:
             self.console.print("\n[bold cyan][2/4] Service analysis[/bold cyan]")
             self.console.print("  URL target detected.")
             self.console.print("\n[bold cyan][3/4] Adaptive enumeration[/bold cyan]")
             web_targets = [plan.target]
+            service_targets = []
 
         for w_target in web_targets:
             for adapter in self.web_adapters:
                 if adapter.supports_target(w_target):
                     tp = adapter.build_plan(w_target, plan.output_directory)
                     if not tp:
-                        self.console.print(f"[-] {adapter.tool_name}: Executable/wordlist unavailable")
-                        results.append(self._create_skipped(adapter.tool_name, w_target.input, [], "Executable/wordlist unavailable"))
                         continue
 
-                    if not self.registry.is_installed(tp.tool) and tp.tool not in ["http_collector", "tls_collector"]:
-                        self.console.print(f"[-] {tp.tool}: Executable not found")
-                        results.append(self._create_skipped(tp.tool, w_target.input, tp.arguments, "Executable not found"))
+                    if not self.registry.is_installed(tp.tool) and tp.tool not in ["http_collector", "tls_collector", "smb_collector", "dns_collector"]:
                         continue
-
-                    self.console.print(f"[*] Running {tp.tool} on {w_target.url}...")
 
                     if tp.output_file and w_target.port:
                         base, ext = os.path.splitext(tp.output_file)
@@ -187,9 +210,21 @@ class RealExecutionBackend(ExecutionBackend):
                             if arg == base + ext:
                                 tp.arguments[i] = tp.output_file
 
+                    self.console.print(f"[*] {adapter.capability_name} on {w_target.url}...")
                     result = self.executor.execute(tp)
                     results.append(result)
-                    self._print_result(tp.tool, result)
+                    self._print_result(adapter.capability_name, result)
+
+        for s_target in service_targets:
+            for adapter in self.service_adapters:
+                if adapter.supports_target(s_target):
+                    tp = adapter.build_plan(s_target, plan.output_directory)
+                    if not tp:
+                        continue
+                    self.console.print(f"[*] {adapter.capability_name} on {s_target.ip}:{s_target.port}...")
+                    result = self.executor.execute(tp)
+                    results.append(result)
+                    self._print_result(adapter.capability_name, result)
 
         exec_file = os.path.join(plan.output_directory, "execution.json")
         with open(exec_file, "w") as f:
@@ -200,6 +235,7 @@ class RealExecutionBackend(ExecutionBackend):
         self.console.print("\n[bold cyan][4/4] Correlation[/bold cyan]")
         analyzed_target = self.analyzer.analyze_directory(plan.output_directory)
         return analyzed_target
+
 
 
     def _create_skipped(self, tool, target, args, error):

@@ -11,6 +11,11 @@ class NmapAdapter(ToolAdapter):
         return "nmap"
 
     @property
+    def capability_name(self) -> str:
+        return "Network Service Discovery"
+
+
+    @property
     def parser_name(self) -> str:
         return "NmapXMLParser"
 
@@ -26,13 +31,14 @@ class NmapAdapter(ToolAdapter):
         args = ["-sV"]
 
         if depth == "Common":
-            args.extend(["-F"]) # Fast top ports scan
+            pass # Standard top 1000 ports scan with version detection
         elif depth == "Medium":
             args.extend(["-sC"]) # Top 1000 ports + default scripts
         elif depth == "Deep":
             args.extend(["-p-", "-sC"]) # All ports scan + default scripts
         else:
             args.extend(["-sC"])
+
 
         if mode == "WAF-Aware Low-Impact Recon":
             args.extend(["-T2", "--max-retries", "1"])

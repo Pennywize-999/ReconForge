@@ -36,6 +36,15 @@ class ToolExecutor:
             from reconforge.tools.collectors import execute_tls_collector
             return execute_tls_collector(plan, self.config)
 
+        if plan.tool == "smb_collector":
+            from reconforge.tools.collectors import execute_smb_collector
+            return execute_smb_collector(plan, self.config)
+
+        if plan.tool == "dns_collector":
+            from reconforge.tools.collectors import execute_dns_collector
+            return execute_dns_collector(plan, self.config)
+
+
         started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         start_time = time.time()
 

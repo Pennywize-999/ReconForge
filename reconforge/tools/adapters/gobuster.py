@@ -11,6 +11,11 @@ class GobusterAdapter(ToolAdapter):
         return "gobuster"
 
     @property
+    def capability_name(self) -> str:
+        return "Web Path Enumeration"
+
+
+    @property
     def parser_name(self) -> str:
         return "GobusterParser"
 
