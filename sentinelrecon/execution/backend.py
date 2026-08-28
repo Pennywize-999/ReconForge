@@ -140,10 +140,10 @@ class RealExecutionBackend:
             self.console.print("    [INFO] No confirmed application technology matched")
 
         if active_techs:
-            tech_str = " + ".join(sorted(active_techs))
-            self.console.print(f"  AUTONOMOUS DISCOVERY: COMMON + {tech_str}")
+            tech_str = " + ".join(["Baseline"] + [t.capitalize() for t in sorted(active_techs)])
+            self.console.print(f"  Targeted content discovery ({tech_str})")
         else:
-            self.console.print("  AUTONOMOUS DISCOVERY: COMMON")
+            self.console.print("  Targeted content discovery (Baseline)")
 
         # 2. Execute Content Discovery with Composite Wordlist (Common + Technology Profiles)
         for adapter in self.discovery_adapters:
@@ -174,9 +174,8 @@ class RealExecutionBackend:
                     )
                     if adaptive_tp:
                         self._run_plan(adaptive_tp, target.input, results)
-                        break
 
-        if target.scheme == "https" and self.tls_adapter.supports_target(target):
+        if self.tls_adapter.supports_target(target):
             tp = self.tls_adapter.build_plan(target, plan.output_directory)
             if tp:
                 self._run_plan(tp, target.input, results)
@@ -189,7 +188,10 @@ class RealExecutionBackend:
         capability_name = tool.capability_name if tool and tool.capability_name else tool_plan.tool
 
         if not self.registry.is_installed(tool_plan.tool):
-            self.console.print(f"  [MISSING] {capability_name}")
+            if tool_plan.tool in {"host", "dns_lookup"}:
+                self.console.print("  [INFO] Reverse DNS utility unavailable")
+            else:
+                self.console.print(f"  [INFO] {capability_name} provider unavailable ({tool_plan.tool})")
             return None
 
         result = self.executor.execute(tool_plan)
@@ -223,27 +225,24 @@ class RealExecutionBackend:
         return RealExecutionBackend._classify_dns_result(result) == "no-record"
 
     def _show_service_routing(self, analyzed_target, web_targets):
-        self.console.print("\nSERVICE-AWARE ROUTING")
+        self.console.print("\n  DISCOVERED SERVICES")
+        self.console.print("  " + "-" * 55)
+        self.console.print(f"  {'PORT':<10} {'SERVICE':<12} {'PRODUCT':<20} {'VERSION':<10}")
+        self.console.print("  " + "-" * 55)
         for host in analyzed_target.hosts.values():
             for port in sorted(host.ports, key=lambda p: (p.number, p.protocol)):
                 if port.state != "open":
                     continue
-
                 ident = self.service_classifier.classify(port, host)
-                service_display = ident.detected_service.upper() if ident.detected_service != "unknown" else "UNKNOWN"
-                prod_display = ident.product or "Unspecified"
-                conf_display = ident.confidence.value
+                svc_name = ident.detected_service.upper() if ident.detected_service != "unknown" else "UNKNOWN"
+                prod_str = ident.product or ""
+                ver_str = ident.version or ""
+                self.console.print(f"  {port.number}/{port.protocol:<5} {svc_name:<12} {prod_str:<20} {ver_str:<10}")
 
-                self.console.print(f"\n{port.number}/{port.protocol}")
-                self.console.print(f"  Service:    {service_display}")
-                self.console.print(f"  Product:    {prod_display}")
-                if ident.version:
-                    self.console.print(f"  Version:    {ident.version}")
-                self.console.print(f"  Capability: {ident.capability.value}")
-                self.console.print(f"  Confidence: {conf_display}")
-                self.console.print(f"  Evidence:   {ident.evidence_source}")
-                if ident.contradiction:
-                    self.console.print(f"  Note:       {ident.contradiction}")
+        if web_targets:
+            self.console.print("\n  WEB CAPABILITY ROUTING")
+            for wt in web_targets:
+                self.console.print(f"    {wt.url} -> Web Probing & Autonomous Discovery")
 
     @staticmethod
     def _technology_context(target, web_target):

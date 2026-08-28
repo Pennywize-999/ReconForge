@@ -24,7 +24,7 @@ def execute_http_collector(plan: ToolExecutionPlan, config: Any):
     timed_out = False
 
     try:
-        req = urllib.request.Request(target_url, headers={"User-Agent": "SentinelRecon/1.1.0"})
+        req = urllib.request.Request(target_url, headers={"User-Agent": "SentinelRecon/1.1.1"})
         with urllib.request.urlopen(req, timeout=config.timeout) as response:
             status = response.status
             headers = response.getheaders()

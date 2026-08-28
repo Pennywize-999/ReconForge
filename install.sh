@@ -20,7 +20,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo
 printf '%s\n' '=============================================================='
-printf '%s\n' '           SENTINELRECON 1.1.0 PRODUCTION INSTALLER           '
+printf '%s\n' '           SENTINELRECON 1.1.1 PRODUCTION INSTALLER           '
 printf '%s\n' '=============================================================='
 echo
 
@@ -56,6 +56,8 @@ echo
 
 # 3. Create isolated installation directory & environment
 echo "[+] Setting up SentinelRecon environment in ${INSTALL_DIR}..."
+rm -rf /opt/reconforge
+rm -f "${BIN_PATH}" "${COMPAT_BIN_PATH}"
 mkdir -p "${INSTALL_DIR}"
 rm -rf "${INSTALL_DIR}/app"
 mkdir -p "${INSTALL_DIR}/app"
@@ -87,7 +89,7 @@ printf '%s\n' '--------------------------------------------------------------'
 printf '  %-28s %-20s %s\n' "Application Capability" "Underlying Provider" "Status"
 printf '%s\n' '  ------------------------------------------------------------'
 printf '  %-28s %-20s [OK] Built-in\n' "HTTP Response Analysis" "HTTP Collector"
-printf '  %-28s %-20s [OK] Built-in\n' "Normalization & Correlation" "SentinelCore"
+printf '  %-28s %-20s [OK] Built-in\n' "Normalization & Correlation" "Built-in"
 printf '  %-28s %-20s [OK] Built-in\n' "Vulnerability Assessment" "Local Advisories/NVD"
 
 EXTERNAL_MODULES=(
@@ -109,7 +111,7 @@ for entry in "${EXTERNAL_MODULES[@]}"; do
 done
 printf '%s\n' '--------------------------------------------------------------'
 echo
-echo '[+] SentinelRecon 1.1.0 installed successfully.'
+echo '[+] SentinelRecon 1.1.1 installed successfully.'
 echo
 echo '    Run SentinelRecon anytime with:'
 echo '        sentinelrecon'

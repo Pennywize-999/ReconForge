@@ -179,13 +179,20 @@ class TerminalReporter:
             prod = vuln.affected_product or "Unknown"
             if vuln.detected_version and prod.endswith(vuln.detected_version):
                 prod = prod[: -len(vuln.detected_version)].strip()
-            svc_port = f"{vuln.affected_service or 'service'}:{vuln.port}" if vuln.port else (vuln.affected_service or "service")
+            svc_name = (vuln.affected_service or "service").upper()
+            port_str = f"{vuln.port}/tcp" if vuln.port else "TCP"
 
             self.console.print(f"\n[bold]{vuln.severity}[/bold]  [bold cyan]{cve}[/bold cyan]")
-            self.console.print(f"{prod} / {svc_port}")
-            self.console.print(f"Confidence: {vuln.confidence.value}")
             if vuln.title:
-                self.console.print(f"\n{vuln.title}")
+                self.console.print(f"\n{vuln.title}\n")
+
+            self.console.print("Affected service:")
+            self.console.print(f"  {port_str} {svc_name}")
+            self.console.print(f"  Product: {prod}")
+            if vuln.detected_version:
+                self.console.print(f"  Version: {vuln.detected_version}")
+
+            self.console.print(f"\nConfidence: {vuln.confidence.value}")
             if vuln.reasoning:
                 self.console.print(f"Reason: {vuln.reasoning}")
             elif vuln.description:

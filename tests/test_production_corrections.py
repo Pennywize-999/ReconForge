@@ -1,4 +1,4 @@
-"""Production regression tests for SentinelRecon 1.1.0 corrections."""
+"""Production regression tests for SentinelRecon v1.1.1 corrections."""
 
 import json
 import os
@@ -688,4 +688,82 @@ def test_vulnerability_compact_rendering():
     assert "Tomcat AJP connector exposed on port 8009." in output
 
 
+# ---------------------------------------------------------------------------
+# 31. Synthetic test case: 22/tcp HTTP and 80/tcp SSH
+# ---------------------------------------------------------------------------
+def test_synthetic_22_http_and_80_ssh():
+    from sentinelrecon.services.classifier import ServiceClassifier
+    from sentinelrecon.vulnerability.engine import VulnerabilityEngine
 
+    sc = ServiceClassifier()
+    engine = VulnerabilityEngine()
+
+    host = Host(ip="10.10.10.100", status="up")
+    p_web = Port(22, "tcp", "open", Service(name="http", product="Apache httpd", version="2.4.10"))
+    p_ssh = Port(80, "tcp", "open", Service(name="ssh", product="OpenSSH", version="6.7p1 Debian 5"))
+    host.ports = [p_web, p_ssh]
+    target = Target(hosts={host.ip: host})
+
+    # 1. Classification
+    c_web = sc.classify(p_web, host)
+    c_ssh = sc.classify(p_ssh, host)
+
+    assert c_web.is_web is True, "22/tcp HTTP should be classified as WEB"
+    assert c_ssh.is_ssh is True, "80/tcp SSH should be classified as SSH"
+    assert c_ssh.is_web is False, "80/tcp SSH must not be classified as WEB"
+
+    # 2. HTTP Routing
+    web_targets = RealExecutionBackend._discover_web_targets(target)
+    urls = [wt.url for wt in web_targets]
+    assert "http://10.10.10.100:22" in urls
+    assert not any(":80" in u for u in urls), "80/tcp SSH must not enter web targets"
+
+    # 3. Vulnerability Correlation
+    engine.assess_target(target)
+    ssh_vulns = [v for v in host.vulnerabilities if "OpenSSH" in (v.affected_product or "") or "SSH" in (v.affected_product or "") or "CVE-2018-15473" in (v.cve_id or "")]
+    if ssh_vulns:
+        assert ssh_vulns[0].port == 80, "OpenSSH CVE must be attached to port 80"
+
+    # 4. Rendering format
+    reporter = TerminalReporter()
+    output_buffer = StringIO()
+    reporter.console = Console(file=output_buffer, highlight=False)
+    reporter.report(target)
+    output = output_buffer.getvalue()
+
+    # Must NOT duplicate service identifier (e.g. 80/tcp ssh / 80/tcp ssh)
+    assert "80/tcp ssh / 80/tcp ssh" not in output
+    assert "80/tcp SSH / 80/tcp SSH" not in output
+    # Must NOT expose Python tuples (e.g. [('2.3', '7.7')])
+    assert "[('" not in output
+
+
+# ---------------------------------------------------------------------------
+# 32. Synthetic test case: 8080/tcp Tomcat and 8009/tcp AJP (Ghostcat)
+# ---------------------------------------------------------------------------
+def test_synthetic_tomcat_8080_and_ajp_8009():
+    from sentinelrecon.services.classifier import ServiceClassifier
+    from sentinelrecon.vulnerability.engine import VulnerabilityEngine
+
+    sc = ServiceClassifier()
+    engine = VulnerabilityEngine()
+
+    host = Host(ip="10.10.10.200", status="up")
+    p_tomcat = Port(8080, "tcp", "open", Service(name="http", product="Apache Tomcat", version="9.0.30"))
+    p_ajp = Port(8009, "tcp", "open", Service(name="ajp13", product="Apache Jserv", version="1.3"))
+    host.ports = [p_tomcat, p_ajp]
+    target = Target(hosts={host.ip: host})
+
+    # 1. Routing
+    web_targets = RealExecutionBackend._discover_web_targets(target)
+    urls = [wt.url for wt in web_targets]
+    assert "http://10.10.10.200:8080" in urls
+    assert not any(":8009" in u for u in urls), "8009/tcp AJP must not enter web targets"
+
+    # 2. Vulnerability Correlation
+    engine.assess_target(target)
+    ghostcat = next((v for v in host.vulnerabilities if v.cve_id == "CVE-2020-1938"), None)
+    assert ghostcat is not None
+    assert ghostcat.severity == "CRITICAL"
+    assert ghostcat.port == 8080
+    assert "8009" in ghostcat.reasoning
