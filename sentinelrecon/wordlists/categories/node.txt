@@ -1,0 +1,20 @@
+# Node.js / Express Discovery Profile
+package.json
+package-lock.json
+npm-debug.log
+yarn.lock
+yarn-error.log
+node_modules/
+server.js
+app.js
+index.js
+routes/
+api/
+api/docs
+swagger.json
+.env
+.env.local
+.npmrc
+nodemon.json
+ecosystem.config.js
+pm2.config.js

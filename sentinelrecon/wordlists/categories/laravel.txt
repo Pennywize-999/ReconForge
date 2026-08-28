@@ -1,0 +1,24 @@
+# Laravel Discovery Profile
+storage
+storage/
+storage/logs/
+storage/logs/laravel.log
+storage/framework/
+bootstrap
+bootstrap/cache/
+artisan
+.env
+.env.example
+.env.backup
+.env.local
+.env.production
+telescope
+horizon
+nova
+api/v1
+sanctum/csrf-cookie
+broadcasting/auth
+routes/web.php
+routes/api.php
+composer.json
+package.json

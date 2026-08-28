@@ -1,3 +1,5 @@
+"""Reconnaissance execution planner constructing capabilities-based execution plans."""
+
 from typing import Any, Dict
 
 from sentinelrecon.core.models import ReconPlan, ReconTarget
@@ -10,31 +12,29 @@ class ReconPlanner:
     def plan(self, target: ReconTarget) -> ReconPlan:
         modules = []
         components = []
+        profile_name = getattr(target, "discovery_profile", "AUTONOMOUS") or "AUTONOMOUS"
         metadata: Dict[str, Any] = {
-            "discovery_profile": target.discovery_profile.upper(),
+            "discovery_profile": profile_name.upper(),
             "components": components,
         }
 
-        # DNS Intelligence
-        modules.append("ForgeDNS")
-        components.append("ForgeDNS")
+        # 1. Network & DNS Discovery
+        modules.append("Network Discovery")
+        components.append("Network Discovery")
 
         if target.target_type == "ip":
-            modules.extend(["ForgeScan", "Network Analysis (Nmap)", "Service Intelligence"])
-            components.append("ForgeScan")
+            modules.extend(["Service Analysis", "Technology Detection", "Adaptive Discovery"])
+            components.extend(["Service Analysis", "Technology Detection", "Adaptive Discovery"])
         elif target.target_type == "url":
-            modules.extend([
-                "ForgeProbe", "Web Analysis",
-                "ForgeTech", "Technology Identification (WhatWeb)",
-                "ForgeDiscover",
-            ])
-            components.extend(["ForgeProbe", "ForgeTech", "ForgeDiscover"])
+            modules.extend(["Service Analysis", "Web Analysis", "Technology Detection", "Adaptive Discovery"])
+            components.extend(["Service Analysis", "Web Analysis", "Technology Detection", "Adaptive Discovery"])
             if target.scheme == "https":
-                modules.extend(["ForgeTLS", "TLS Analysis"])
-                components.append("ForgeTLS")
+                modules.append("TLS Analysis")
+                components.append("TLS Analysis")
 
-        modules.extend(["SentinelCore", "VulnerabilityAssessment", "FindingsCorrelation", "Report"])
-        components.extend(["SentinelCore", "VulnerabilityAssessment", "FindingsCorrelation", "Report"])
+        # 2. Vulnerability Intelligence, Correlation & Reporting
+        modules.extend(["Vulnerability Assessment", "Findings Correlation", "Report Generation"])
+        components.extend(["Vulnerability Assessment", "Findings Correlation", "Report Generation"])
 
         if target.mode == "WAF-Aware Low-Impact Recon":
             metadata.update({

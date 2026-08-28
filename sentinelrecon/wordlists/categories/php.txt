@@ -1,13 +1,20 @@
-!phpinfo.php
+# PHP Discovery Profile
+phpinfo.php
 info.php
-php.php
-test.php
 index.php
+test.php
 config.php
-configuration.php
-login.php
+config.inc.php
+db.php
+database.php
+connect.php
 admin.php
-install.php
-setup.php
+login.php
 composer.json
 composer.lock
+composer.phar
+vendor/
+vendor/autoload.php
+.user.ini
+php.ini
+debug.php

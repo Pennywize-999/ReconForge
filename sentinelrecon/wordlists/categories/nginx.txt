@@ -1,0 +1,9 @@
+# NGINX Discovery Profile
+nginx_status
+stub_status
+nginx-status
+status
+50x.html
+404.html
+nginx.conf
+conf.d/

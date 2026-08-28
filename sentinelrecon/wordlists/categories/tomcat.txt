@@ -1,0 +1,27 @@
+# Apache Tomcat Discovery Profile
+manager
+manager/
+manager/html
+manager/status
+manager/jmxproxy
+manager/text
+host-manager
+host-manager/
+host-manager/html
+host-manager/text
+docs
+docs/
+docs/appdev/
+docs/architecture/
+examples
+examples/
+examples/servlets/
+examples/jsp/
+examples/websocket/
+ROOT
+ROOT/
+RELEASE-NOTES.txt
+tomcat-docs
+tomcat-docs/
+status
+status?full=true

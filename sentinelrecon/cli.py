@@ -1,3 +1,5 @@
+"""SentinelRecon CLI - Adaptive Reconnaissance & Vulnerability Correlation Engine."""
+
 import argparse
 import dataclasses
 import json
@@ -49,10 +51,14 @@ def main():
         description="SentinelRecon - Adaptive Reconnaissance & Vulnerability Correlation Engine"
     )
     parser.add_argument("--version", action="version", version=f"SentinelRecon v{__version__}")
-    parser.add_argument("-u", "--url", help="URL target")
-    parser.add_argument("--mode", choices=["standard", "low-impact"], help="Reconnaissance mode")
-    parser.add_argument("--plan", action="store_true", help="Only plan the execution")
+    parser.add_argument("target", nargs="?", default=None, help="Target IP, hostname, or URL")
+    parser.add_argument("-u", "--url", help="Target URL or IP (alternative to positional argument)")
+    parser.add_argument("--mode", choices=["standard", "low-impact"], default=None, help="Reconnaissance mode (standard vs low-impact)")
+    parser.add_argument("--plan", action="store_true", help="Display autonomous execution plan without executing tools")
     parser.add_argument("--execute", action="store_true", help="Execute the planned tools")
+
+    # Optional backward compatibility for legacy profile flag
+    parser.add_argument("-p", "--profile", "--depth", dest="profile", choices=["common", "medium", "deep", "COMMON", "MEDIUM", "DEEP", "autonomous", "AUTONOMOUS"], default="AUTONOMOUS", help=argparse.SUPPRESS)
 
     known_commands = ["import", "analyze", "sessions", "show", "report", "waf", "tools"]
     has_command = any(arg in known_commands for arg in sys.argv[1:])
@@ -87,7 +93,7 @@ def main():
     args, unknown = parser.parse_known_args()
     session_manager = SessionManager()
 
-    if has_command:
+    if has_command and getattr(args, "command", None):
         if args.command == "import":
             if not os.path.isdir(args.directory):
                 print(f"[!] Error: Directory {args.directory} does not exist.")
@@ -165,15 +171,25 @@ def main():
             print_tools()
             sys.exit(0)
 
-    target_str = args.url or (unknown[0] if unknown else None)
+    target_str = args.target or args.url or (unknown[0] if (unknown and not unknown[0].startswith("-")) else None)
     if target_str:
-        mode = "WAF-Aware Low-Impact Recon" if args.mode == "low-impact" else "Standard Recon"
+        mode = "WAF-Aware Low-Impact Recon" if (args.mode and args.mode.lower() == "low-impact") else "Standard Recon"
         recon_target = TargetParser.parse(target_str)
         recon_target.mode = mode
+        recon_target.discovery_profile = "AUTONOMOUS"
         recon_target.source = "cli"
 
         planner = ReconPlanner()
         plan = planner.plan(recon_target)
+
+        if args.plan:
+            print("SentinelRecon Execution Plan")
+            print("-" * 40)
+            print(f"Target:   {recon_target.url or recon_target.input}")
+            print(f"Mode:     {recon_target.mode}")
+            print(f"Modules:  {', '.join(plan.modules)}")
+            sys.exit(0)
+
         backend = RealExecutionBackend()
         result = backend.execute(plan)
 
@@ -183,9 +199,9 @@ def main():
             JSONReporter().report(result, json_path)
             html_path = os.path.join(plan.output_directory, "report.html")
             HTMLReporter().report(result, html_path)
-            print("\nEVIDENCE & REPORTS")
-            print(f"  {json_path}")
-            print(f"  {html_path}")
+            print("\nReports generated:")
+            print("  JSON: report.json")
+            print("  HTML: report.html")
         sys.exit(0)
 
     from sentinelrecon.interactive import interactive_menu
@@ -201,9 +217,9 @@ def main():
         JSONReporter().report(result, json_path)
         html_path = os.path.join(plan.output_directory, "report.html")
         HTMLReporter().report(result, html_path)
-        print("\nEVIDENCE & REPORTS")
-        print(f"  {json_path}")
-        print(f"  {html_path}")
+        print("\nReports generated:")
+        print("  JSON: report.json")
+        print("  HTML: report.html")
     sys.exit(0)
 
 

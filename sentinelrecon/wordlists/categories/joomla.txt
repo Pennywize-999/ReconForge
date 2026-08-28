@@ -1,0 +1,25 @@
+# Joomla Discovery Profile
+administrator
+administrator/
+administrator/index.php
+administrator/manifests/
+bin/
+cache/
+cli/
+components/
+includes/
+language/
+layouts/
+libraries/
+media/
+modules/
+plugins/
+templates/
+configuration.php
+configuration.php.bak
+configuration.php.old
+configuration.php~
+htaccess.txt
+web.config.txt
+README.txt
+LICENSE.txt

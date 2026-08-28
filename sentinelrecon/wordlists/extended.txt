@@ -1,3 +1,53 @@
-# ReconForge EXTENDED profile
-# Runtime composition: general + admin + authentication + backup + configuration + api + detected technology/server categories.
-# Source: ReconForge curated corpus
+# SentinelRecon MEDIUM / EXTENDED baseline additions
+account
+accounts
+app
+application
+archive
+archives
+audit
+auth/login
+backend
+billing
+bin
+cgi-bin/
+console
+controlpanel
+cpanel
+cron
+data
+database
+db
+debug
+download
+downloads
+export
+graphql
+graphiql
+import
+install
+installer
+logs
+manage
+management
+media
+metrics
+monitor
+monitoring
+panel
+phpinfo.php
+profile
+register
+reports
+setup
+shell
+storage
+support
+system
+temp
+tmp
+tools
+trace
+version
+ws
+xmlrpc.php

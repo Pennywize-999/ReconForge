@@ -73,6 +73,11 @@ class Vulnerability:
     affected_versions: Optional[str] = None
     fixed_version: Optional[str] = None
     cpe: Optional[str] = None
+    cwe: Optional[str] = None
+    kev_status: bool = False
+    affected_service: Optional[str] = None
+    port: Optional[int] = None
+    reasoning: Optional[str] = None
     confidence: Confidence = Confidence.UNKNOWN
     source: str = ""
     evidence: List[Evidence] = field(default_factory=list)
@@ -228,6 +233,7 @@ class Service:
     product: str = ""
     version: str = ""
     cpe: str = ""
+    extra_info: str = ""
     technologies: List[Technology] = field(default_factory=list)
 
     @classmethod

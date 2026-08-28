@@ -50,4 +50,5 @@ def test_capability_router():
     assert "AJP" in router.get_route_description(p_ajp)
 
     p_web = Port(number=8080, protocol="tcp", state="open", service=Service(name="http", product="Apache Tomcat"))
-    assert "ForgeProbe -> ForgeTech -> ForgeDiscover" in router.get_route_description(p_web)
+    assert "HTTP Probing -> Technology Detection -> Content Discovery" in router.get_route_description(p_web)
+    assert "Forge" not in router.get_route_description(p_web)

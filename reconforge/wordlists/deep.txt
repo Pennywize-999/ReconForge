@@ -1,3 +1,0 @@
-# ReconForge DEEP profile
-# Runtime composition: extended categories + development + extensions + all matched technology/server categories.
-# Source: ReconForge curated corpus

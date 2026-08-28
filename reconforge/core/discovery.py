@@ -25,7 +25,14 @@ class DiscoveryEngine:
     PROFILE_LIMITS = {"COMMON": 5000, "EXTENDED": 30000, "DEEP": 100000}
 
     def __init__(self, root: Path | None = None):
-        self.root = root or Path(__file__).resolve().parents[1] / "wordlists"
+        if root:
+            self.root = root
+        else:
+            sentinel_wl = Path(__file__).resolve().parents[2] / "sentinelrecon" / "wordlists"
+            if sentinel_wl.exists():
+                self.root = sentinel_wl
+            else:
+                self.root = Path(__file__).resolve().parents[1] / "wordlists"
 
     def load_category(self, category: str) -> List[DiscoveryCandidate]:
         path = self.root / "categories" / f"{category}.txt"

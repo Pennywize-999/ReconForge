@@ -1,0 +1,18 @@
+# Django Discovery Profile
+admin
+admin/
+admin/login/
+admin/password_reset/
+static/admin/
+static/admin/css/
+media/
+api/
+api/v1/
+__debug__/
+manage.py
+settings.py
+urls.py
+wsgi.py
+asgi.py
+requirements.txt
+Pipfile

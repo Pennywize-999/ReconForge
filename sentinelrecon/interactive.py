@@ -1,5 +1,5 @@
-import dataclasses
-import json
+"""Interactive reconnaissance UX for live SentinelRecon execution."""
+
 import os
 import sys
 
@@ -23,22 +23,15 @@ def _show_banner():
     console.print(Panel(banner, border_style="bright_cyan", width=70, padding=(0, 2)))
 
 
-def _read_mode(choice):
-    if choice not in {"1", "2"}:
-        print("[!] Invalid option.")
-        sys.exit(1)
-    return "Standard Recon" if choice == "1" else "WAF-Aware Low-Impact Recon"
+def _read_mode(choice: str) -> str:
+    choice = choice.strip()
+    if choice not in {"1", "2", "standard", "low-impact"}:
+        print("[!] Invalid option. Selecting Standard Recon by default.")
+        return "Standard Recon"
+    return "Standard Recon" if choice in {"1", "standard"} else "WAF-Aware Low-Impact Recon"
 
 
-def _read_profile(choice):
-    profiles = {"1": "COMMON", "2": "MEDIUM", "3": "DEEP"}
-    if choice not in profiles:
-        print("[!] Invalid option.")
-        sys.exit(1)
-    return profiles[choice]
-
-
-def _set_url_port(target, legacy=False, selector=False):
+def _set_url_port(target, selector: bool = False):
     if target.target_type != "url":
         return
 
@@ -62,87 +55,64 @@ def _set_url_port(target, legacy=False, selector=False):
             if not port:
                 target.port = default_port
             elif not port.isdigit() or not 1 <= int(port) <= 65535:
-                print("[!] Invalid port. Please enter 1-65535.")
-                sys.exit(1)
+                print("[!] Invalid port. Using default port.")
+                target.port = default_port
             else:
                 target.port = int(port)
         else:
-            print("[!] Invalid port option.")
-            sys.exit(1)
-    else:
-        port = input(f"Port [{default_port}]: ").strip()
-        if not port:
             target.port = default_port
-        elif not port.isdigit() or not 1 <= int(port) <= 65535:
-            print("[!] Invalid port. Please enter 1-65535.")
-            sys.exit(1)
-        else:
-            target.port = int(port)
+    else:
+        target.port = default_port
 
     target.url = f"{target.scheme}://{target.hostname or target.ip}:{target.port}"
 
 
 def interactive_menu():
-    """Interactive target/mode/profile selection for live SentinelRecon execution."""
+    """Interactive target and mode selection for live SentinelRecon execution.
+
+    Autonomous discovery replaces manual depth selection.
+    """
     try:
         _show_banner()
 
-        first = input("Enter IP or URL: ").strip()
+        first = input("Enter IP, hostname, or URL: ").strip()
         if not first:
             print("[!] Target cannot be empty.")
             sys.exit(1)
 
-        legacy = first in {"1", "2"}
-        if legacy:
+        # Legacy compatibility: if user input was a mode selection number '1' or '2'
+        legacy_mode = first in {"1", "2"}
+        if legacy_mode:
             mode = _read_mode(first)
-            profile = _read_profile(input("Select discovery profile [1-3]: ").strip())
-            target_input = input("Enter IP or URL: ").strip()
+            target_input = input("Enter IP, hostname, or URL: ").strip()
+            if not target_input:
+                print("[!] Target cannot be empty.")
+                sys.exit(1)
         else:
             target_input = first
             mode = None
-            profile = None
-
-        if not target_input:
-            print("[!] Target cannot be empty.")
-            sys.exit(1)
 
         target = TargetParser.parse(target_input)
-        target.mode = mode or "Standard Recon"
-        target.source = "interactive"
-
         if target.target_type == "unknown":
-            print("[!] Enter a valid IP address or http:// / https:// URL.")
+            print("[!] Enter a valid IP address, hostname, or http:// / https:// URL.")
             sys.exit(1)
 
-        compat_port_selector = False
         if mode is None:
-            print("\nRecon Mode\n")
-            print("1. STANDARD")
-            print("2. LOW-IMPACT\n")
-            mode_choice = input("Select option [1-2]: ").strip()
-            if mode_choice == "":
-                mode = "Standard Recon"
-                compat_port_selector = True
-            else:
-                mode = _read_mode(mode_choice)
+            console.print("\n[bold cyan]Recon Mode:[/bold cyan]\n")
+            console.print("  [bold white]1.[/bold white] Standard Recon")
+            console.print("  [bold white]2.[/bold white] Low-Impact Recon (WAF/Firewall-Conscious)\n")
+            mode_choice = input("Select mode [1-2] (default: 1): ").strip()
+            mode = _read_mode(mode_choice if mode_choice else "1")
 
         target.mode = mode
-        _set_url_port(target, legacy=legacy, selector=(legacy or compat_port_selector))
-
-        if profile is None:
-            print("\nContent Discovery Profile\n")
-            print("1. COMMON")
-            print("2. MEDIUM")
-            print("3. DEEP\n")
-            profile = _read_profile(input("Select option [1-3]: ").strip())
-
-        target.discovery_profile = profile
         target.source = "interactive_execute"
+        target.discovery_profile = "AUTONOMOUS"
+
+        _set_url_port(target, selector=True if target.target_type == "url" else False)
 
         console.print("\n[bold bright_cyan]Starting SentinelRecon...[/bold bright_cyan]")
         console.print(f"[bold white]Target:[/bold white]   {target.url or target.input}")
-        console.print(f"[bold white]Mode:[/bold white]     {target.mode}")
-        console.print(f"[bold white]Profile:[/bold white]  [bright_cyan]{target.discovery_profile}[/bright_cyan]\n")
+        console.print(f"[bold white]Mode:[/bold white]     {target.mode}\n")
         return target
     except KeyboardInterrupt:
         print("\n[!] SentinelRecon cancelled.")
@@ -150,45 +120,3 @@ def interactive_menu():
     except EOFError:
         print("\n[!] Input stream closed.")
         sys.exit(1)
-
-
-def install_cli_overrides(cli_module):
-    """Keep existing CLI commands, execute interactive scans, and persist every run."""
-    from sentinelrecon.execution.backend import RealExecutionBackend
-    from sentinelrecon.reporters.html import HTMLReporter
-    from sentinelrecon.reporters.json_ext import JSONReporter
-
-    class InteractiveBackend:
-        def execute(self, plan):
-            session_manager = SessionManager()
-            session = session_manager.create_session(Target())
-            plan.output_directory = session_manager.get_session_dir(session.id)
-
-            plan_path = os.path.join(plan.output_directory, "plan.json")
-            with open(plan_path, "w", encoding="utf-8") as handle:
-                json.dump(dataclasses.asdict(plan), handle, indent=2)
-
-            result = RealExecutionBackend().execute(plan)
-            if result is None:
-                return None
-
-            session.target = result
-            session.raw_files = sorted(
-                os.path.relpath(os.path.join(root, name), plan.output_directory)
-                for root, _, files in os.walk(plan.output_directory)
-                for name in files
-                if name != "target.json"
-            )
-            session_manager.save_session(session)
-
-            JSONReporter().report(result, os.path.join(plan.output_directory, "report.json"))
-            HTMLReporter().report(result, os.path.join(plan.output_directory, "report.html"))
-
-            console.print("\n[bold bright_cyan]SCAN SAVED[/bold bright_cyan]")
-            console.print(f"  Session: {session.id}")
-            console.print(f"  Location: {plan.output_directory}")
-            console.print("  Reports: report.json, report.html")
-            return result
-
-    cli_module.interactive_menu = interactive_menu
-    cli_module.ExecutionBackend = InteractiveBackend

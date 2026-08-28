@@ -25,7 +25,8 @@ def test_terminal_reporter_empty_vulnerabilities():
     output = string_io.getvalue()
 
     assert "VULNERABILITY ASSESSMENT" in output
-    assert "No vulnerability matches identified from available evidence" in output
+    assert "Status: No matching vulnerabilities found" in output
+    assert "No confirmed or potential vulnerabilities were identified" in output
     assert "Assessment coverage:" in output
 
 

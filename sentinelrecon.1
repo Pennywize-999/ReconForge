@@ -1,4 +1,4 @@
-.TH SENTINELRECON 1 "August 2026" "SentinelRecon v1.1.0" "User Commands"
+.TH SENTINELRECON 1 "August 2026" "SentinelRecon v1.1.1" "User Commands"
 .SH NAME
 sentinelrecon \- Adaptive reconnaissance and vulnerability correlation engine
 .SH SYNOPSIS
@@ -8,10 +8,10 @@ sentinelrecon \- Adaptive reconnaissance and vulnerability correlation engine
 .B sentinelrecon
 \fICOMMAND\fR [\fIARGS\fR]
 .SH DESCRIPTION
-SentinelRecon is an adaptive reconnaissance and evidence correlation framework designed for authorized penetration testing, security audits, and laboratory assessments. It integrates network discovery, service capability classification (AJP, Web, SSH, SMB, DNS, Databases), web technology fingerprinting, content discovery, and evidence-based vulnerability intelligence into a unified pipeline.
+SentinelRecon is an adaptive reconnaissance and evidence correlation framework designed for authorized penetration testing, security audits, and laboratory assessments. It integrates network discovery, service capability classification (AJP, Web, SSH, SMB, DNS, Databases), web technology fingerprinting, autonomous content discovery, and evidence-based vulnerability intelligence into a unified pipeline.
 
 .SH INTERACTIVE MODE
-Running \fBsentinelrecon\fR without arguments launches the interactive mode, prompting for Target (IP or URL), Recon Mode (STANDARD or LOW-IMPACT), and Content Discovery Profile (COMMON, MEDIUM, or DEEP).
+Running \fBsentinelrecon\fR without arguments launches the interactive mode, prompting for Target (IP or URL) and Recon Mode (1. Standard Recon or 2. Low-Impact Recon). Content discovery profiles are selected and composed autonomously based on detected services and technologies.
 
 .SH TARGET USAGE
 .B sentinelrecon <IP>

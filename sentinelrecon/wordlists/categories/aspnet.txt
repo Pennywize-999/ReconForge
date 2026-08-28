@@ -1,0 +1,23 @@
+# ASP.NET / IIS Discovery Profile
+elmah.axd
+trace.axd
+Web.config
+web.config
+web.config.bak
+web.config.old
+Web.Debug.config
+Web.Release.config
+Global.asax
+api/values
+api/swagger
+swagger/ui/index
+bin/
+App_Data/
+App_Code/
+App_Config/
+aspnet_client/
+packages.config
+Site.Master
+Default.aspx
+Login.aspx
+Admin.aspx

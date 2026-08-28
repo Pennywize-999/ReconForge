@@ -96,11 +96,13 @@ class NmapXMLParser(BaseParser):
                                     )
                                 )
 
+                            s_extra = service_node.get("extrainfo", "")
                             service = Service(
                                 name=s_name,
                                 product=s_product,
                                 version=s_version,
                                 cpe=s_cpe,
+                                extra_info=s_extra,
                                 technologies=techs,
                             )
 

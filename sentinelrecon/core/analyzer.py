@@ -149,9 +149,34 @@ class Analyzer:
             if not value or len(value) > 300:
                 continue
             lower = value.lower()
-            if "sessions/current/" in lower or lower in self.INTERNAL_TOKENS:
+
+            # Ignore scanner-generated paths, execution logs, tool banners, and internal metadata
+            if (
+                "sessions/" in lower
+                or "sentinelrecon" in lower
+                or "reconforge" in lower
+                or "/home/" in lower
+                or "\\users\\" in lower
+                or "/opt/" in lower
+                or "/tmp/" in lower
+                or "/var/tmp" in lower
+                or "/usr/share/" in lower
+                or "c:\\" in lower
+                or lower in self.INTERNAL_TOKENS
+                or "nmap done at" in lower
+                or "starting nmap" in lower
+                or "gobuster" in lower
+                or "dirb" in lower
+                or "whatweb" in lower
+                or "starting gobuster" in lower
+                or "loaded" in lower and "words" in lower
+                or "wordlist:" in lower
+                or "extensions:" in lower
+            ):
                 continue
-            if re.match(r"^(command|output_file|start_time|end_time|progress|scanning|url_base|wordlist_files)\s*[:=]", lower):
+            if re.match(r"^(command|output_file|start_time|end_time|progress|scanning|url_base|wordlist_files|runtime|execution)\s*[:=]", lower):
+                continue
+            if re.match(r"^nmap\s+-[sSpPTA0-9]", lower):
                 continue
             if re.fullmatch(r"[A-Z][A-Z0-9_-]{3,30}", value) and value.lower() in self.INTERNAL_TOKENS:
                 continue
@@ -160,25 +185,64 @@ class Analyzer:
             relevance = ""
             confidence = Confidence.UNKNOWN
             extracted = value
-            m_hash = re.search(r"\b[a-fA-F0-9]{32}\b|\b[a-fA-F0-9]{40}\b|\b[a-fA-F0-9]{64}\b", value)
-            m_b64 = re.search(r"\b[A-Za-z0-9+/]{20,}={0,2}\b", value)
+
+            # 1. Hashes (Strict hexadecimal MD5, SHA1, SHA256)
+            m_hash = re.search(r"\b([a-fA-F0-9]{64}|[a-fA-F0-9]{40}|[a-fA-F0-9]{32})\b", value)
+
+            # 2. JWT Tokens
+            m_jwt = re.search(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\b", value)
+
+            # 3. Known API Key Prefixes (AWS, GitHub, Google, Stripe)
+            m_api_key = re.search(r"\b(ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24}|AIza[0-9A-Za-z-_]{35})\b", value)
+
+            # 4. Credential Context
             credential_context = any(k in lower for k in ("password", "passwd", "pwd", "secret", "token", "api_key", "apikey", "authorization"))
             key_context = any(k in lower for k in ("private key", "client_secret", "access_key", "secret_key"))
 
-            if m_hash:
-                extracted = m_hash.group(0)
-                kind, relevance, confidence = "HASH-LIKE", "Potential credential/data artifact", Confidence.MEDIUM
-            elif m_b64 and len(m_b64.group(0)) >= 20:
-                extracted = m_b64.group(0)
-                kind, relevance, confidence = "ENCODED/TOKEN-LIKE", "Potential encoded value or token", Confidence.LOW
+            # 5. Base64 encoded payload with explicit padding (excluding ordinary path slashes / doc paths)
+            m_b64 = re.search(r"\b[A-Za-z0-9+]{16,}={1,2}\b", value)
+
+            # 6. Interesting source code / HTML comments
+            m_comment = re.search(r"(?:<!--|//|\/\*)\s*(.*(?:TODO|FIXME|ADMIN|DEBUG|INTERNAL|CREDENTIAL|PASSWORD).*?)(?:-->|\*\/|$)", value, re.I)
+
+            # 7. Privileged Application Endpoints
+            m_admin_path = re.search(r"\b(/(?:manager/html|admin|administrator|wp-admin|phpmyadmin|actuator|api/v\d+/\w+))\b", value, re.I)
+
+            # 8. Pure Documentation URLs
+            m_doc_url = re.search(r"\bhttps?://(?:[a-zA-Z0-9-]+\.)*(?:apache\.org|github\.com|wikipedia\.org|owasp\.org)/\S+\b", value)
+
+            if m_jwt:
+                extracted = m_jwt.group(0)
+                kind, relevance, confidence = "JWT-TOKEN", "Potential JSON Web Token", Confidence.HIGH
+            elif m_api_key:
+                extracted = m_api_key.group(0)
+                kind, relevance, confidence = "API-KEY-LIKE", "High-confidence API key artifact", Confidence.HIGH
+            elif m_hash:
+                # Disregard if part of a URL / file path
+                if not re.search(r"[/\\]", value[:m_hash.start()] + value[m_hash.end():]):
+                    extracted = m_hash.group(0)
+                    kind, relevance, confidence = "HASH-LIKE", "Potential credential or cryptographic artifact", Confidence.MEDIUM
             elif credential_context or key_context:
                 match = re.search(r"(?:password|passwd|pwd|secret|token|api[_-]?key|authorization|private key|client_secret|access_key|secret_key)\s*[:=]\s*['\"]?([^'\"\s,;]+)", value, re.I)
-                if match:
+                if match and len(match.group(1)) >= 3:
                     extracted = match.group(1)
-                    kind, relevance, confidence = "CREDENTIAL/SECRET-LIKE", "Potential credential or secret value", Confidence.MEDIUM
-            elif re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{5,63}", value) and not value.startswith(("http", "www")):
-                if any(ch.isdigit() for ch in value) or "-" in value or "_" in value or len(value) >= 10:
-                    kind, relevance, confidence = "UNCLASSIFIED-TEXT", "Potential identifier, credential candidate, or application value", Confidence.LOW
+                    kind, relevance, confidence = "CREDENTIAL/SECRET-LIKE", "Discovered credential or secret value", Confidence.MEDIUM
+            elif m_b64:
+                extracted = m_b64.group(0)
+                kind, relevance, confidence = "ENCODED-DATA", "Potential base64 encoded data payload", Confidence.LOW
+            elif m_admin_path:
+                extracted = m_admin_path.group(0)
+                kind, relevance, confidence = "APPLICATION-PATH", "Privileged application endpoint", Confidence.LOW
+            elif m_comment:
+                extracted = m_comment.group(1).strip()
+                kind, relevance, confidence = "INTERESTING-COMMENT", "Developer or security comment", Confidence.LOW
+            elif m_doc_url:
+                extracted = m_doc_url.group(0)
+                kind, relevance, confidence = "DOCUMENTATION-REFERENCE", "Documentation or vendor reference link", Confidence.LOW
+            elif re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{5,63}", value) and not value.startswith(("http", "www", "org/", "com/", "net/")):
+                # Avoid java packages, class namespaces, and ordinary paths
+                if "/" not in value and "\\" not in value and (any(ch.isdigit() for ch in value) or "_" in value or "-" in value):
+                    kind, relevance, confidence = "UNCLASSIFIED-TEXT", "Potential identifier or application value", Confidence.LOW
 
             if kind:
                 key = (kind, extracted, os.path.basename(file_path))

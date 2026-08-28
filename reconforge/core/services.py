@@ -3,6 +3,7 @@ from sentinelrecon.services.classifier import (
     ServiceCertainty,
     ServiceClassification,
     ServiceClassifier,
+    ServiceIdentity,
 )
 from sentinelrecon.services.router import ServiceCapabilityRouter
 
@@ -11,5 +12,6 @@ __all__ = [
     "ServiceCertainty",
     "ServiceClassification",
     "ServiceClassifier",
+    "ServiceIdentity",
     "ServiceCapabilityRouter",
 ]

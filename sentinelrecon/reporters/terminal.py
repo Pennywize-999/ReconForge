@@ -1,3 +1,5 @@
+"""Terminal reporter for SentinelRecon with clean Kali terminal layout and provenance isolation."""
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -31,15 +33,15 @@ class TerminalReporter:
                 self._print_waf(host)
 
     def _print_evidence_section(self, target: Target):
-        if not target.evidence:
+        if not getattr(target, "evidence", None):
             self.console.print("No reconnaissance evidence was collected.")
             return
-        self.console.print("\n[bold cyan]EVIDENCE[/bold cyan]\n" + "-" * 60)
+        self.console.print("\n[bold cyan]EVIDENCE[/bold cyan]\n" + "-" * 50)
         for ev in target.evidence:
             self.console.print(f"  {ev.source_type}: {ev.source_file}")
 
     def _print_target(self, host: Host):
-        self.console.print(f"\n[bold cyan]TARGET[/bold cyan]\n{'-' * 60}")
+        self.console.print(f"\n[bold cyan]TARGET[/bold cyan]\n{'-' * 50}")
         self.console.print(f"Status:   {host.status}")
         self.console.print(f"IP:       {host.ip}")
         if host.mac:
@@ -54,7 +56,7 @@ class TerminalReporter:
     def _print_services(self, host: Host):
         if not host.ports:
             return
-        self.console.print("\n[bold cyan]SERVICES[/bold cyan]\n" + "-" * 60)
+        self.console.print(f"\n[bold cyan]SERVICES[/bold cyan]\n{'-' * 50}")
         table = Table(box=None, pad_edge=False, show_edge=False, expand=False)
         for col in ("PORT", "STATE", "SERVICE", "PRODUCT", "VERSION"):
             table.add_column(col, no_wrap=True)
@@ -73,7 +75,7 @@ class TerminalReporter:
         if not host.web_endpoints:
             return
 
-        self.console.print("\n[bold cyan]WEB TECHNOLOGY[/bold cyan]\n" + "-" * 60)
+        self.console.print(f"\n[bold cyan]WEB TECHNOLOGY[/bold cyan]\n{'-' * 50}")
         techs = {}
         for endpoint in host.web_endpoints:
             for tech in endpoint.technologies:
@@ -129,7 +131,7 @@ class TerminalReporter:
         tls = [f for f in host.findings if f.source_type in ["TLS Analysis", "TLSParser"]]
         if not tls:
             return
-        self.console.print("\n[bold cyan]TLS / CERTIFICATES[/bold cyan]\n" + "-" * 60)
+        self.console.print(f"\n[bold cyan]TLS / CERTIFICATES[/bold cyan]\n{'-' * 50}")
         for finding in tls:
             self.console.print(f"{finding.title}: {finding.description}")
 
@@ -137,7 +139,7 @@ class TerminalReporter:
         waf = host.waf_analysis
         if not waf:
             return
-        self.console.print("\n[bold cyan]WAF / CDN ANALYSIS[/bold cyan]\n" + "-" * 60)
+        self.console.print(f"\n[bold cyan]WAF / CDN ANALYSIS[/bold cyan]\n{'-' * 50}")
         self.console.print(f"Detection:     {'Possible' if waf.detected else 'None'}")
         self.console.print(f"Confidence:    {waf.confidence.value}")
         if waf.provider:
@@ -148,7 +150,7 @@ class TerminalReporter:
                 self.console.print(f"HTTP {status}:    {count}")
 
     def _print_vulnerabilities(self, host: Host):
-        self.console.print("\n[bold cyan]VULNERABILITY ASSESSMENT[/bold cyan]\n" + "-" * 60)
+        self.console.print(f"\n[bold cyan]VULNERABILITY ASSESSMENT[/bold cyan]\n{'-' * 50}")
 
         services_count = len([p for p in host.ports if p.service])
         distinct_products = {p.service.product.lower() for p in host.ports if p.service and p.service.product}
@@ -158,10 +160,11 @@ class TerminalReporter:
 
         if not vulnerabilities:
             self.console.print("Status: No matching vulnerabilities found")
-            self.console.print("No vulnerability matches identified from available evidence.\n")
+            self.console.print("No confirmed or potential vulnerabilities were identified")
+            self.console.print("from the available evidence.\n")
             self.console.print("Assessment coverage:")
             self.console.print(f"  Services assessed:           {services_count}")
-            self.console.print(f"  Services analyzed:           {services_count}")
+            self.console.print(f"  Products assessed:           {len(distinct_products)}")
             self.console.print(f"  Products identified:         {len(distinct_products)}")
             self.console.print(f"  Versions identified:         {len(distinct_versions)}")
             self.console.print(f"  CPEs identified:             {len(distinct_cpes)}")
@@ -170,43 +173,28 @@ class TerminalReporter:
             self.console.print("  Confirmed vulnerabilities:   0")
             return
 
-        table = Table(box=None, pad_edge=False, show_edge=False, expand=False)
-        table.add_column("SEVERITY", no_wrap=True)
-        table.add_column("CVE", no_wrap=True)
-        table.add_column("PRODUCT", no_wrap=True)
-        table.add_column("VERSION", no_wrap=True)
-        table.add_column("CONFIDENCE", no_wrap=True)
-
         severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4, "UNKNOWN": 5}
         for vuln in sorted(vulnerabilities, key=lambda v: (severity_order.get(v.severity, 99), v.cve_id or "")):
-            prod = vuln.affected_product
+            cve = vuln.cve_id or "VULN"
+            prod = vuln.affected_product or "Unknown"
             if vuln.detected_version and prod.endswith(vuln.detected_version):
                 prod = prod[: -len(vuln.detected_version)].strip()
-            table.add_row(
-                vuln.severity,
-                vuln.cve_id or "VULN",
-                prod or "Unknown",
-                vuln.detected_version or "unknown",
-                vuln.confidence.value,
-            )
-        self.console.print(table)
+            svc_port = f"{vuln.affected_service or 'service'}:{vuln.port}" if vuln.port else (vuln.affected_service or "service")
 
-        detail = Table(box=None, pad_edge=False, show_edge=False, expand=False)
-        detail.add_column("CVE", no_wrap=True)
-        detail.add_column("TITLE", overflow="fold")
-        detail.add_column("EVIDENCE", overflow="fold")
-        for vuln in vulnerabilities:
-            ev_snippet = vuln.evidence[0].content if vuln.evidence else (vuln.description[:80] + "...")
-            detail.add_row(
-                vuln.cve_id or "VULN",
-                vuln.title,
-                ev_snippet,
-            )
-        self.console.print(detail)
+            self.console.print(f"\n[bold]{vuln.severity}[/bold]  [bold cyan]{cve}[/bold cyan]")
+            self.console.print(f"{prod} / {svc_port}")
+            self.console.print(f"Confidence: {vuln.confidence.value}")
+            if vuln.title:
+                self.console.print(f"\n{vuln.title}")
+            if vuln.reasoning:
+                self.console.print(f"Reason: {vuln.reasoning}")
+            elif vuln.description:
+                self.console.print(f"Details: {vuln.description}")
+            if vuln.kev_status:
+                self.console.print("KEV Status: Known Exploited Vulnerability (CISA KEV: YES)")
 
         self.console.print("\nAssessment coverage:")
         self.console.print(f"  Services assessed:           {services_count}")
-        self.console.print(f"  Services analyzed:           {services_count}")
         self.console.print(f"  Products assessed:           {len(distinct_products)}")
         self.console.print(f"  Products identified:         {len(distinct_products)}")
         self.console.print(f"  Versions identified:         {len(distinct_versions)}")
@@ -214,13 +202,12 @@ class TerminalReporter:
         self.console.print("  Intelligence sources:        Local Advisories, NVD, CISA KEV")
         self.console.print(f"  Potential matches:           {len(vulnerabilities)}")
         self.console.print(f"  Vulnerability records evaluated: {len(AUTHORITATIVE_DATASET)}")
-        self.console.print(f"  Vulnerability records eval:  {len(AUTHORITATIVE_DATASET)}")
 
     def _print_findings(self, host: Host):
         findings = [f for f in host.findings if f.source_type not in ["TLS Analysis", "TLSParser"]]
         if not findings:
             return
-        self.console.print("\n[bold cyan]FINDINGS[/bold cyan]\n" + "-" * 60)
+        self.console.print(f"\n[bold cyan]FINDINGS[/bold cyan]\n{'-' * 50}")
         table = Table(box=None, pad_edge=False, show_edge=False, expand=False)
         table.add_column("TYPE", no_wrap=True)
         table.add_column("SEVERITY", no_wrap=True)
@@ -233,10 +220,26 @@ class TerminalReporter:
     def _print_unclassified(self, host: Host):
         if not host.unclassified:
             return
-        self.console.print("\n[bold magenta]UNCLASSIFIED INTELLIGENCE[/bold magenta]\n" + "-" * 60)
+        clean_items = []
+        for item in host.unclassified:
+            val = item.value.strip()
+            if (
+                len(val) > 120
+                or "sessions/" in val.lower()
+                or "nmap" in val.lower()
+                or "sentinelrecon" in val.lower()
+                or "reconforge" in val.lower()
+                or "/home/" in val.lower()
+                or "/opt/" in val.lower()
+            ):
+                continue
+            clean_items.append(item)
+        if not clean_items:
+            return
+        self.console.print(f"\n[bold magenta]UNCLASSIFIED INTELLIGENCE[/bold magenta]\n{'-' * 50}")
         table = Table(box=None, pad_edge=False, show_edge=False, expand=False)
         for col in ("TYPE", "VALUE", "CONTEXT", "POTENTIAL RELEVANCE", "CONFIDENCE"):
             table.add_column(col, overflow="fold")
-        for item in host.unclassified:
-            table.add_row(item.kind, item.value, item.context[:100], item.potential_relevance, item.confidence.value)
+        for item in clean_items:
+            table.add_row(item.kind, item.value, item.context[:80], item.potential_relevance, item.confidence.value)
         self.console.print(table)

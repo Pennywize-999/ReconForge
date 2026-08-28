@@ -1,8 +1,16 @@
-!server-status
+# Apache HTTP Server Discovery Profile
+server-status
 server-info
-!.htaccess
-!.htpasswd
-!.hta
-cgi-bin/
+.htaccess
+.htpasswd
+.htaccess.bak
+.htpasswd.bak
 icons/
+icons/README
 manual/
+manual/index.html
+cgi-bin/
+cgi-bin/test-cgi
+cgi-bin/printenv
+balancer-manager
+server-status?auto

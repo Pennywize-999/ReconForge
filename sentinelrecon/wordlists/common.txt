@@ -1,3 +1,59 @@
-# ReconForge COMMON profile
-# High-confidence baseline candidates. Categories are expanded at runtime.
-# Source: ReconForge curated corpus
+# SentinelRecon COMMON baseline wordlist
+# High-confidence, cross-technology baseline paths. Always included as the foundation.
+admin
+administrator
+admin/
+login
+signin
+auth
+dashboard
+portal
+api
+api/
+api/v1
+api/v2
+docs
+swagger
+swagger.json
+openapi.json
+users
+user
+users/
+secret
+secret/
+secrets
+private
+internal
+uploads
+upload
+files
+assets
+static
+images
+css
+js
+test
+dev
+staging
+old
+backup
+backup/
+backups
+config
+configuration
+status
+health
+healthz
+server-status
+server-info
+robots.txt
+sitemap.xml
+favicon.ico
+index.html
+index.php
+.git/
+.env
+.htaccess
+.htpasswd
+README.txt
+README.md

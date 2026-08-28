@@ -1,19 +1,22 @@
 # SentinelRecon User Guide
 
-SentinelRecon v1.1.0 is an adaptive reconnaissance and evidence correlation engine designed for authorized penetration testing, security audits, and laboratory environments.
+SentinelRecon v1.1.1 is an adaptive reconnaissance and evidence correlation engine designed for authorized penetration testing, security audits, and laboratory environments.
+
+---
 
 ## 1. CLI Reference
 
 - `sentinelrecon`: Launches the interactive reconnaissance wizard.
 - `sentinelrecon --help`: Displays the help menu and available commands.
-- `sentinelrecon --version`: Displays the installed version (v1.1.0).
+- `sentinelrecon --version`: Displays the installed version (v1.1.1).
+- `sentinelrecon tools`: Displays capability provider status.
 
-*(Note: The legacy command `reconforge` is available as a compatibility alias)*
+*(Note: The legacy command `reconforge` is available as a backward-compatible alias)*
 
 ### Command-Line Arguments & Direct Scanning
 
 ```bash
-# Scan an IP address (STANDARD mode)
+# Scan an IP address directly (STANDARD mode)
 sentinelrecon 10.49.128.206
 
 # Scan with LOW-IMPACT reconnaissance mode
@@ -22,26 +25,40 @@ sentinelrecon 10.10.10.25 --mode low-impact
 # Scan a specific HTTP service URL
 sentinelrecon -u http://10.49.128.206:8080
 
-# Scan an HTTPS service URL
-sentinelrecon --url https://target.example.com
+# Scan an HTTPS service URL with custom port
+sentinelrecon -u https://target.example.com:8443 --mode low-impact
+
+# Generate offline execution plan without executing tools
+sentinelrecon 10.49.128.206 --plan
 ```
 
-### Interactive Mode
+### Interactive Wizard Workflow
 
-Running `sentinelrecon` without arguments presents the interactive workflow:
+Running `sentinelrecon` without arguments presents the streamlined interactive workflow:
 
-1. **Enter IP or URL**: Target IP address or HTTP/HTTPS URL.
+1. **Target Input**:
+   - Enter IP address, hostname, or full HTTP/HTTPS URL.
+   - (For HTTP/HTTPS targets without an explicit port, prompts for Default vs Custom port).
 2. **Recon Mode**:
-   - `STANDARD`: Complete first-level reconnaissance (port scanning, service detection, OS detection, web probing, technology fingerprinting, content discovery, and evidence-based vulnerability intelligence).
-   - `LOW-IMPACT`: Reduced-intensity reconnaissance (respects Retry-After, avoids duplicate requests).
-3. **Content Discovery Profile**:
-   - `COMMON`: High-signal baseline discovery (admin, auth, api, reports, secrets, robots.txt).
-   - `MEDIUM`: Expanded path discovery (backup files, configuration endpoints).
-   - `DEEP`: Maximum coverage profile for authorized deep assessments.
+   - `1. Standard Recon`: Full comprehensive reconnaissance (port scanning, service detection, OS identification, web probing, technology fingerprinting, autonomous content discovery, and evidence-based vulnerability intelligence).
+   - `2. Low-Impact Recon`: WAF/Firewall-conscious reconnaissance (rate-limited, respects Retry-After, avoids aggressive duplicate requests).
+
+> [!NOTE]
+> Discovery datasets (WordPress, Tomcat, Apache, Nginx, PHP, Spring, Django, Laravel, etc.) are **automatically classified, composed, and executed** with the Common baseline based on evidence.
 
 ---
 
-## 2. Session Management & Reports
+## 2. Autonomous Technology Discovery & Profile Composition
+
+SentinelRecon enforces deterministic composite wordlist generation:
+- **Common Baseline is ALWAYS Preserved**: The baseline wordlist is never replaced by framework-specific lists.
+- **Automatic Fusion**: When technologies like Apache, PHP, and WordPress are detected, SentinelRecon generates a composite candidate set (`COMMON + APACHE + PHP + WORDPRESS`).
+- **High-Signal Paths**: Important target findings like `/secret/`, `/backup/`, `/admin/`, and `robots.txt` are strictly retained.
+- **Trailing Slashes**: Distinctions between directories (`secret/`, `manager/`, `wp-admin/`) and files (`secret`, `manager`, `wp-login.php`) are preserved.
+
+---
+
+## 3. Session Management & Reports
 
 Every scan creates a unique, collision-safe session under `~/.sentinelrecon/sessions/session_<timestamp>`. Previous scans are never overwritten.
 
@@ -62,29 +79,4 @@ sentinelrecon report current --format html --output scan.html
 
 # View WAF / CDN analysis for a session
 sentinelrecon waf current
-```
-
----
-
-## 3. Offline Log Ingestion & Analysis
-
-SentinelRecon can analyze existing tool outputs from previous engagements:
-
-```bash
-# Import an entire directory of scan results
-sentinelrecon import /path/to/logs/
-
-# Analyze a single tool output file
-sentinelrecon analyze /path/to/nmap.xml
-```
-
-Supported formats: Nmap XML, DNS output, HTTP headers/response, SMB logs, TLS records, Gobuster text, Dirb text, WhatWeb output, and generic text logs.
-
----
-
-## 4. Tool Registry & Capabilities
-
-```bash
-# Check status of underlying application capabilities and providers
-sentinelrecon tools
 ```

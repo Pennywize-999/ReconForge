@@ -1,3 +1,0 @@
-# ReconForge EXTENDED profile
-# Runtime composition: general + admin + authentication + backup + configuration + api + detected technology/server categories.
-# Source: ReconForge curated corpus
