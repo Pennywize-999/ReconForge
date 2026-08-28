@@ -10,7 +10,7 @@ class TerminalReporter:
         self.console = Console(highlight=False)
 
     def report(self, target: Target):
-        self.console.print("\n")
+        self.console.print()
         self.console.print(Panel("[bold white]RECONFORGE ANALYSIS REPORT[/bold white]", expand=False, style="cyan"))
         for host in target.hosts.values():
             self._print_target(host)
@@ -28,7 +28,7 @@ class TerminalReporter:
             if host.waf_analysis:
                 self._print_waf(host)
 
-    # Compatibility hook retained for older callers/tests. ReconForge no longer
+    # Compatibility hook retained for older callers. ReconForge no longer
     # renders raw execution/session evidence in the user-facing report.
     def _print_evidence_section(self, target: Target):
         return None
@@ -60,7 +60,7 @@ class TerminalReporter:
                 port.state,
                 service.name if service else "unknown",
                 service.product if service else "",
-                service.version if service else "",
+                service.version if (service and service.version) else "unknown",
             )
         self.console.print(table)
 

@@ -56,7 +56,7 @@
                 <td>{{ port.number }}/{{ port.protocol }}</td>
                 <td>{{ port.service.name if port.service else 'unknown' }}</td>
                 <td>{{ port.service.product if port.service else '' }}</td>
-                <td>{{ port.service.version if port.service else '' }}</td>
+                <td>{{ port.service.version if (port.service and port.service.version) else 'unknown' }}</td>
             </tr>
             {% endfor %}
         </table>

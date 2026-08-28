@@ -19,6 +19,8 @@ class FindingType(Enum):
     VULNERABILITY = "VULNERABILITY"
     ERROR = "ERROR"
 
+import dataclasses
+
 @dataclass
 class Evidence:
     source_file: str
@@ -27,7 +29,8 @@ class Evidence:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Evidence":
-        return cls(**data)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in valid})
 
 @dataclass
 class UnclassifiedIntelligence:
@@ -47,7 +50,8 @@ class UnclassifiedIntelligence:
                 d["confidence"] = Confidence(d["confidence"])
             except ValueError:
                 d["confidence"] = Confidence.UNKNOWN
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class Vulnerability:
@@ -76,10 +80,11 @@ class Vulnerability:
             except ValueError:
                 d["confidence"] = Confidence.UNKNOWN
         if "evidence" in d:
-            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"]]
-        if "affected_version" in d:
+            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"] if isinstance(e, dict)]
+        if "affected_version" in d and "detected_version" not in d:
             d["detected_version"] = d.pop("affected_version")
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class Finding:
@@ -107,8 +112,9 @@ class Finding:
             except ValueError:
                 d["confidence"] = Confidence.UNKNOWN
         if "evidence" in d:
-            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"]]
-        return cls(**d)
+            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"] if isinstance(e, dict)]
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class Technology:
@@ -126,7 +132,8 @@ class Technology:
                 d["confidence"] = Confidence(d["confidence"])
             except ValueError:
                 d["confidence"] = Confidence.INFO
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class WebEndpoint:
@@ -143,9 +150,15 @@ class WebEndpoint:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WebEndpoint":
         d = dict(data)
+        if "status_codes" in d and ("status_code" not in d or d["status_code"] is None):
+            codes = d.pop("status_codes")
+            d["status_code"] = codes[0] if codes else None
+        elif "status_codes" in d:
+            d.pop("status_codes")
         if "technologies" in d:
-            d["technologies"] = [Technology.from_dict(t) for t in d["technologies"]]
-        return cls(**d)
+            d["technologies"] = [Technology.from_dict(t) for t in d["technologies"] if isinstance(t, dict)]
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class LowImpactProfile:
@@ -158,7 +171,8 @@ class LowImpactProfile:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LowImpactProfile":
-        return cls(**data)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in valid})
 
 @dataclass
 class WAFAnalysis:
@@ -186,10 +200,11 @@ class WAFAnalysis:
             except ValueError:
                 d["provider_confidence"] = Confidence.UNKNOWN
         if "evidence" in d:
-            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"]]
+            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"] if isinstance(e, dict)]
         if "low_impact_profile" in d and d["low_impact_profile"]:
             d["low_impact_profile"] = LowImpactProfile.from_dict(d["low_impact_profile"])
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class Service:
@@ -203,8 +218,9 @@ class Service:
     def from_dict(cls, data: Dict[str, Any]) -> "Service":
         d = dict(data)
         if "technologies" in d:
-            d["technologies"] = [Technology.from_dict(t) for t in d["technologies"]]
-        return cls(**d)
+            d["technologies"] = [Technology.from_dict(t) for t in d["technologies"] if isinstance(t, dict)]
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class Port:
@@ -216,9 +232,10 @@ class Port:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Port":
         d = dict(data)
-        if "service" in d and d["service"] is not None:
+        if "service" in d and d["service"] is not None and isinstance(d["service"], dict):
             d["service"] = Service.from_dict(d["service"])
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class Host:
@@ -240,18 +257,19 @@ class Host:
     def from_dict(cls, data: Dict[str, Any]) -> "Host":
         d = dict(data)
         if "ports" in d:
-            d["ports"] = [Port.from_dict(p) for p in d["ports"]]
+            d["ports"] = [Port.from_dict(p) for p in d["ports"] if isinstance(p, dict)]
         if "web_endpoints" in d:
-            d["web_endpoints"] = [WebEndpoint.from_dict(w) for w in d["web_endpoints"]]
+            d["web_endpoints"] = [WebEndpoint.from_dict(w) for w in d["web_endpoints"] if isinstance(w, dict)]
         if "vulnerabilities" in d:
-            d["vulnerabilities"] = [Vulnerability.from_dict(v) for v in d["vulnerabilities"]]
+            d["vulnerabilities"] = [Vulnerability.from_dict(v) for v in d["vulnerabilities"] if isinstance(v, dict)]
         if "findings" in d:
-            d["findings"] = [Finding.from_dict(f) for f in d["findings"]]
+            d["findings"] = [Finding.from_dict(f) for f in d["findings"] if isinstance(f, dict)]
         if "unclassified" in d:
-            d["unclassified"] = [UnclassifiedIntelligence.from_dict(v) for v in d["unclassified"]]
-        if "waf_analysis" in d and d["waf_analysis"]:
+            d["unclassified"] = [UnclassifiedIntelligence.from_dict(v) for v in d["unclassified"] if isinstance(v, dict)]
+        if "waf_analysis" in d and d["waf_analysis"] and isinstance(d["waf_analysis"], dict):
             d["waf_analysis"] = WAFAnalysis.from_dict(d["waf_analysis"])
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class Target:
@@ -263,12 +281,13 @@ class Target:
     def from_dict(cls, data: Dict[str, Any]) -> "Target":
         d = dict(data)
         if "hosts" in d:
-            d["hosts"] = {k: Host.from_dict(v) for k, v in d["hosts"].items()}
+            d["hosts"] = {k: Host.from_dict(v) for k, v in d["hosts"].items() if isinstance(v, dict)}
         if "evidence" in d:
-            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"]]
+            d["evidence"] = [Evidence.from_dict(e) for e in d["evidence"] if isinstance(e, dict)]
         if "execution" in d:
             d["execution"] = list(d["execution"])
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 @dataclass
 class ScanSession:
@@ -282,9 +301,10 @@ class ScanSession:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ScanSession":
         d = dict(data)
-        if "target" in d:
+        if "target" in d and isinstance(d["target"], dict):
             d["target"] = Target.from_dict(d["target"])
-        return cls(**d)
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in valid})
 
 class ModelEncoder(json.JSONEncoder):
     def default(self, obj):

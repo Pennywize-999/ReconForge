@@ -1,55 +1,47 @@
 # Installation Guide
 
-ReconForge is designed to run in isolated virtual environments on modern Kali Linux systems.
+ReconForge is built for Kali Linux and Debian-based security distributions. The automated installer sets up an isolated environment, installs system dependencies, registers the `reconforge` command globally, and verifies component readiness.
 
-## Prerequisites
+## Recommended Kali Installation
 
-- Python 3.8+
-- Kali Linux (or similar Debian-based security distribution)
-
-## Virtual Environment Setup (PEP 668)
-
-Modern Kali Linux environments restrict global `pip` installations to prevent system conflicts (PEP 668). You must install ReconForge within a virtual environment.
+Run the one-command installer:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-## Standard Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/Pennywize-999/ReconForge
+git clone -b reconforge-intelligence-engine https://github.com/Pennywize-999/ReconForge.git
 cd ReconForge
-
-# Ensure your venv is activated, then install:
-python -m pip install -e .
+sudo ./install.sh
 ```
 
-## Development and Testing Installation
-
-If you intend to run tests or develop, install the development dependencies:
+After installation completes, start ReconForge from any directory:
 
 ```bash
-python -m pip install -e ".[dev]"
+reconforge
 ```
-*(Note: `pytest` is explicitly a development dependency and is installed via the `[dev]` extra.)*
 
-## External Tool Dependencies (Optional)
+## What the Installer Does
 
-ReconForge v0.2.0 uses a **PlanningOnlyBackend** and performs offline analysis. It does NOT actively execute network scans.
-However, for future execution-layer integrations or if you plan to manually generate outputs for the parsers, the following underlying OS security tools are recommended:
+1. **Verifies Environment**: Validates that the system is a supported Linux distribution with `apt-get`.
+2. **Installs System Dependencies**: Checks and installs missing system utilities:
+   - `python3`, `python3-pip`, `python3-venv`
+   - `nmap` (Network discovery and service identification)
+   - `dnsutils` (DNS resolution and reverse lookups)
+   - `whatweb` (Web technology fingerprinting)
+   - `gobuster` (High-speed content discovery)
+   - `dirb` (Directory and content enumeration)
+   - `openssl` (TLS/SSL certificate analysis)
+3. **Creates Isolated Runtime**: Installs ReconForge into `/opt/reconforge/venv` to keep system Python packages clean and compliant with PEP 668.
+4. **Installs Global Executable**: Symlinks the binary to `/usr/local/bin/reconforge`.
+5. **Verifies Components**: Runs self-tests to ensure CLI commands and tools are operational.
+
+## Updating ReconForge
+
+To update an existing installation:
 
 ```bash
-sudo apt update
-sudo apt install nmap gobuster dirb whatweb
+cd ReconForge
+git pull --ff-only origin reconforge-intelligence-engine
+sudo ./install.sh
 ```
 
-## Updating
+Existing scan sessions in `~/.reconforge/sessions/` are preserved during updates.
 
-To update ReconForge:
-```bash
-git pull origin main
-python -m pip install -e .
-```

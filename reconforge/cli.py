@@ -117,9 +117,8 @@ def print_tools():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ReconForge Offline Reconnaissance Analyzer")
+    parser = argparse.ArgumentParser(description="ReconForge First-Level Reconnaissance Engine")
     parser.add_argument("--version", action="version", version=f"ReconForge v{__version__}")
-    parser.add_argument("--test", action="store_true", help="Run local tests")
     parser.add_argument("-u", "--url", help="URL target")
     parser.add_argument("--mode", choices=["standard", "low-impact"], help="Reconnaissance mode")
     parser.add_argument("--plan", action="store_true", help="Only plan the execution")
@@ -150,18 +149,6 @@ def main():
         subparsers.add_parser("tools", help="List external tools availability")
 
     args, unknown = parser.parse_known_args()
-
-    if args.test:
-        print("[*] Running ReconForge test suite...")
-        try:
-            subprocess.run(["python", "-m", "pytest", "tests/"], check=True)
-        except subprocess.CalledProcessError:
-            print("[!] Tests failed.")
-            sys.exit(1)
-        except FileNotFoundError:
-            print("[!] pytest not found. Please ensure it is installed (pip install pytest).")
-            sys.exit(1)
-        sys.exit(0)
 
     session_manager = SessionManager()
 

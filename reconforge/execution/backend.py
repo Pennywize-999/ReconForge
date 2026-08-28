@@ -67,7 +67,10 @@ class RealExecutionBackend(ExecutionBackend):
 
     def execute(self, plan: ReconPlan):
         if not plan.output_directory:
-            plan.output_directory = os.path.join("sessions", "current")
+            from reconforge.core.session import SessionManager
+            session_manager = SessionManager()
+            session = session_manager.create_session(plan.target if hasattr(plan, "target") and plan.target else Target())
+            plan.output_directory = session_manager.get_session_dir(session.id)
         os.makedirs(plan.output_directory, exist_ok=True)
         results = []
 
@@ -221,7 +224,10 @@ class RealExecutionBackend(ExecutionBackend):
             return result
 
         if result.timed_out:
-            self.console.print(f"  [TIMEOUT] {label}: unresolved")
+            if tp.tool == "whatweb":
+                self.console.print(f"  [TIMEOUT] {label}: fingerprinting timed out, continuing")
+            else:
+                self.console.print(f"  [TIMEOUT] {label}: timed out, continuing")
             return result
 
         self.console.print(f"  [WARN] {label}: failed, continuing")

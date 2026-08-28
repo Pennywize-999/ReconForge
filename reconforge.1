@@ -1,6 +1,6 @@
-.TH RECONFORGE 1 "August 2026" "ReconForge v0.2.0" "User Commands"
+.TH RECONFORGE 1 "August 2026" "ReconForge v1.0.0" "User Commands"
 .SH NAME
-reconforge \- Offline reconnaissance analyzer and planning tool
+reconforge \- First-level reconnaissance and security-assessment engine
 .SH SYNOPSIS
 .B reconforge
 [\fITARGET\fR] [\fIOPTIONS\fR]
@@ -8,81 +8,73 @@ reconforge \- Offline reconnaissance analyzer and planning tool
 .B reconforge
 \fICOMMAND\fR [\fIARGS\fR]
 .SH DESCRIPTION
-ReconForge is an offline log analyzer designed for authorized penetration testing environments. It imports raw outputs from Nmap, Gobuster, and other security tools, normalizing and correlating them. Additionally, it offers an interactive planning mode capable of generating structured execution plans based on provided IPs and URLs without executing external network calls directly.
+ReconForge is a first-level reconnaissance and security-assessment framework designed for authorized penetration testing, security assessments, and lab environments. It combines network discovery, DNS intelligence, service-aware enumeration, web technology detection, content discovery, vulnerability intelligence, correlation, and clean reporting into one guided workflow.
 
 .SH INTERACTIVE MODE
-Running \fBreconforge\fR without arguments launches the interactive mode, prompting for Mode, Target Type, and Port Configuration.
+Running \fBreconforge\fR without arguments launches the interactive mode, prompting for Target (IP or URL), Recon Mode (STANDARD or LOW-IMPACT), and Content Discovery Profile (COMMON, EXTENDED, or DEEP).
 
-.SH TARGET MODES
+.SH TARGET USAGE
 .B reconforge <IP>
 .br
-.B reconforge -u http://<IP>:<PORT>
+.B reconforge -u http://<TARGET>:<PORT>
 .br
-.B reconforge -u https://<IP>:<PORT>
+.B reconforge -u https://<TARGET>:<PORT>
 .br
 .B reconforge --url https://example.com
 
 .SH GLOBAL OPTIONS
 .TP
 .B --mode standard
-Plans default enumeration using all applicable installed tools.
-
+STANDARD reconnaissance mode. Performs full first-level discovery including all TCP ports, service detection, default scripts, and OS identification.
 .TP
 .B --mode low-impact
-WAF-Aware Low-Impact Recon. Configures the execution plan constraints to respect rate-limits, Retry-After headers, and avoid duplicate/evasive requests.
-
+LOW-IMPACT reconnaissance mode. Reduces scan intensity, avoids aggressive secondary passes, and observes rate limiting.
 .TP
 .B --version
-Displays the installed ReconForge version (v0.2.0).
-
+Displays the installed ReconForge version (v1.0.0).
 .TP
-.B --test
-Runs the built-in testing workflow.
+.B -h, --help
+Displays command-line help and usage information.
 
 .SH OFFLINE ANALYSIS
 .B reconforge import <dir>
 .br
-Imports an entire directory of scan results and stores them in a session.
+Imports a directory of scan outputs and stores them in a session.
 .br
 .B reconforge analyze <file>
 .br
-Analyzes a single file and outputs the parsed intelligence.
+Analyzes a single scan output file and normalizes findings.
 
 .SH SESSIONS AND REPORTS
 .B reconforge sessions
 .br
-Lists historical sessions.
+Lists stored scan sessions.
 .br
-.B reconforge show current
+.B reconforge show <session_id>
 .br
-Displays the summary of the latest session.
+Displays terminal summary for a specific session (use \fBcurrent\fR for the latest session).
 .br
-.B reconforge report current --format html
+.B reconforge report <session_id> [--format terminal|json|html] [--output <file>]
 .br
-Generates a report for the latest session. Supported formats are terminal, json, and html.
+Generates a report for a session.
 .br
-.B reconforge waf current
+.B reconforge waf <session_id>
 .br
-Outputs the WAF and CDN analysis for the latest session.
+Displays WAF and CDN analysis for a session.
 
-.SH TOOL REGISTRY
+.SH TOOL AVAILABILITY
 .B reconforge tools
 .br
-Checks the availability of registered tools, such as Nmap and Gobuster, via the internal Tool Registry adapters.
+Checks the availability of registered tool adapters and external binaries on the system.
 
 .SH EXAMPLES
 .nf
 reconforge
-reconforge <IP>
-reconforge <IP> --mode low-impact
-reconforge -u http://<IP>:<PORT>
-reconforge -u https://<IP>:<PORT>
-reconforge analyze tests/fixtures/sample.xml
-reconforge import tests/fixtures/
+reconforge 10.10.10.25
+reconforge 10.10.10.25 --mode low-impact
+reconforge -u http://10.10.10.25:80
 reconforge sessions
 reconforge show current
-reconforge report current --format terminal
-reconforge report current --format json
 reconforge report current --format html
 reconforge waf current
 reconforge tools
@@ -90,3 +82,4 @@ reconforge tools
 
 .SH EXIT STATUS
 0 on success, 1 on error.
+

@@ -4,7 +4,7 @@ from reconforge.core.models import ReconTarget, ReconPlan
 
 
 class ReconPlanner:
-    def __init__(self, output_directory: str = "sessions/current"):
+    def __init__(self, output_directory: str = None):
         self.output_directory = output_directory
 
     def plan(self, target: ReconTarget) -> ReconPlan:

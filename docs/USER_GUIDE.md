@@ -1,74 +1,89 @@
 # ReconForge User Guide
 
-ReconForge (v0.2.0) is an offline reconnaissance log analyzer designed for authorized penetration testing environments.
-It analyzes previously generated reconnaissance data (like Nmap, Gobuster, WhatWeb) and plans structured reconnaissance workflows.
-**Note:** ReconForge does not currently execute network scanning tools itself. It relies on a `PlanningOnlyBackend` to safely generate execution plans without performing active network requests.
+ReconForge v1.0.0 is a first-level reconnaissance engine that combines network discovery, DNS intelligence, service-aware enumeration, web technology detection, content discovery, vulnerability intelligence, correlation, and clean reporting into one guided workflow.
 
 ## 1. CLI Reference
 
+- `reconforge`: Launches the interactive reconnaissance wizard.
 - `reconforge --help`: Displays the help menu and available commands.
-- `reconforge --version`: Displays the installed ReconForge version (v0.2.0).
-- `reconforge --test`: Runs the built-in testing workflow.
+- `reconforge --version`: Displays the installed version (v1.0.0).
 
-### Target Planning & Interactive Mode
+### Command-Line Arguments & Direct Scanning
 
-ReconForge can plan reconnaissance for an IP or URL.
+```bash
+# Scan an IP address (STANDARD mode, all TCP ports, service detection)
+reconforge 10.10.10.25
 
-- **Interactive Mode**: Run `reconforge` with no arguments to start the interactive wizard.
-  1. Select Mode: `Standard Recon` or `WAF-Aware Low-Impact Recon`.
-  2. Select Target Type: `IP Address` or `URL`.
-  3. (If URL) Select Port Configuration: `Default Port` or `Custom Port`.
+# Scan with LOW-IMPACT reconnaissance mode
+reconforge 10.10.10.25 --mode low-impact
 
-- **Direct Target Execution**:
-  - `reconforge 10.48.159.132`
-  - `reconforge -u http://10.48.159.132:5000` (or `--url`)
+# Scan a specific HTTP service URL
+reconforge -u http://10.10.10.25:8080
 
-**Target Normalization**:
-When you provide `http://10.48.159.132:5000`, ReconForge automatically normalizes the target:
-- `scheme = http`
-- `host = 10.48.159.132`
-- `ip = 10.48.159.132`
-- `port = 5000`
+# Scan an HTTPS service URL
+reconforge --url https://target.example.com
+```
 
-### Execution Modes
+### Interactive Mode
 
-- `--mode standard`: Standard execution planning utilizing all applicable tools aggressively.
-- `--mode low-impact`: **WAF-Aware Low-Impact Recon**. A conservative, rate-limit-aware planning mode. It does NOT bypass WAFs or security controls. Instead, it respects `Retry-After` headers, spaces out requests, and minimizes repetitive or evasive actions to analyze environments safely.
+Running `reconforge` without arguments presents the interactive workflow:
 
-### Offline Analysis Workflow
+1. **Enter IP or URL**: Target IP address or HTTP/HTTPS URL.
+2. **Recon Mode**:
+   - `STANDARD`: Complete first-level reconnaissance (all TCP ports, default NSE scripts, service/version detection, OS detection, web probing, bounded technology fingerprinting, content discovery, verified vulnerability matching).
+   - `LOW-IMPACT`: Reduced-intensity reconnaissance (top-1000 ports, skips secondary fingerprinting, respects rate-limiting).
+3. **Content Discovery Profile**:
+   - `COMMON`: High-signal baseline discovery (admin, auth, api, reports, secrets, robots.txt, dynamic application categories).
+   - `EXTENDED`: Broadened path enumeration.
+   - `DEEP`: Maximum coverage profile for authorized deep scanning.
 
-You can import and analyze existing reconnaissance outputs:
-1. `reconforge import <directory>`: Imports an entire directory of logs/results into a new session.
-2. `reconforge analyze <file>`: Analyzes a single file and correlates it.
+---
 
-**Intended Workflow:**
-1. Existing reconnaissance output (e.g., Nmap XML, Gobuster TXT)
-2. `reconforge import` or `analyze`
-3. Parsers extract the raw data
-4. Normalized models (`ReconTarget`) are populated
-5. Correlation connects IP and Web services
-6. Vulnerability intelligence cross-references CPEs/CVEs
-7. WAF analysis detects rate limits or CDN presence
-8. Session state is updated
-9. Terminal / JSON / HTML report is generated
+## 2. Session Management & Reports
 
-### Sessions
+Every scan creates a unique, collision-safe session under `~/.reconforge/sessions/session_<timestamp>`. Previous scans are never overwritten.
 
-- `reconforge sessions`: Lists all historical sessions stored in the internal database.
-- `reconforge show <id>`: Shows a quick summary of a specific session (use `current` for the latest session).
+### Managing Sessions
 
-### Reports
+```bash
+# List all saved sessions
+reconforge sessions
 
-Generate rich reports from a session:
-- `reconforge report <id>` (Defaults to terminal)
-- `reconforge report <id> --format terminal`
-- `reconforge report <id> --format json`
-- `reconforge report <id> --format html`
+# View terminal report of a session (or current for latest)
+reconforge show current
+reconforge show session_2026-08-28_12-00-00_000000
 
-### WAF Analysis
+# Export reports in different formats
+reconforge report current --format terminal
+reconforge report current --format json --output scan.json
+reconforge report current --format html --output scan.html
 
-- `reconforge waf <id>`: Outputs the WAF and CDN analysis for the specified session (use `current` for the latest session), detailing rate-limit indicators and detected protection headers.
+# View WAF / CDN analysis for a session
+reconforge waf current
+```
 
-### Tool Registry
+---
 
-- `reconforge tools`: Displays the internal tool registry, listing which execution tool adapters (e.g., Nmap, Gobuster) are currently available on the system.
+## 3. Offline Log Ingestion & Analysis
+
+ReconForge can analyze existing tool outputs from previous engagements:
+
+```bash
+# Import an entire directory of scan results
+reconforge import /path/to/logs/
+
+# Analyze a single tool output file
+reconforge analyze /path/to/nmap.xml
+```
+
+Supported formats: Nmap XML, DNS output, HTTP headers/response, SMB logs, TLS records, Gobuster text, Dirb text, WhatWeb output, and generic text logs.
+
+---
+
+## 4. Tool Registry
+
+```bash
+# Check status of underlying system tools
+reconforge tools
+```
+
