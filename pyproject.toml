@@ -3,12 +3,12 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reconforge"
-version = "1.0.0"
+name = "sentinelrecon"
+version = "1.1.0"
 authors = [
-  { name="ReconForge Project" },
+  { name="SentinelRecon Project" },
 ]
-description = "First-level reconnaissance and security-assessment framework for authorized security testing."
+description = "Adaptive reconnaissance & vulnerability correlation engine for authorized security testing."
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -24,10 +24,12 @@ classifiers = [
 ]
 
 [tool.setuptools.package-data]
+sentinelrecon = ["templates/*.html", "wordlists/*.txt", "wordlists/categories/*.txt"]
 reconforge = ["templates/*.html", "wordlists/*.txt", "wordlists/categories/*.txt"]
 
 [tool.setuptools.packages.find]
-include = ["reconforge*"]
+include = ["sentinelrecon*", "reconforge*"]
 
 [project.scripts]
-reconforge = "reconforge.cli:main"
+sentinelrecon = "sentinelrecon.cli:main"
+reconforge = "sentinelrecon.cli:main"

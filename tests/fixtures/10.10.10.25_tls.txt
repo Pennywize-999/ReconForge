@@ -1,0 +1,5 @@
+CONNECTED(00000003)
+Server certificate
+subject=C = US, ST = CA, L = San Francisco, O = ReconForge, CN = web01.local
+issuer=C = US, ST = CA, L = San Francisco, O = ReconForge, CN = web01.local
+Verify return code: 10 (certificate has expired)

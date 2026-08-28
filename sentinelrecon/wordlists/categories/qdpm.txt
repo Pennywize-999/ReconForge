@@ -1,0 +1,18 @@
+# qdPM application-specific first-level paths
+!index.php
+!login
+!users
+!timeReport
+!timeReport/
+!users/
+!projects
+!tasks
+!tickets
+!reports
+!dashboard
+!configuration
+!settings
+!profile
+!myAccount
+!forgotPassword
+!password

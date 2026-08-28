@@ -1,0 +1,4 @@
+web01.local has address 10.10.10.25
+mail.local has address 10.10.10.26
+Trying AXFR
+AXFR successful

@@ -1,3 +1,5 @@
-"""ReconForge main package."""
+"""ReconForge (Backward Compatibility Alias for SentinelRecon)."""
 
-__version__ = "1.0.0"
+from sentinelrecon import __version__, __author__, __license__
+
+__all__ = ["__version__", "__author__", "__license__"]

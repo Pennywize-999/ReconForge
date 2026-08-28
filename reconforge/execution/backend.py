@@ -53,12 +53,15 @@ class RealExecutionBackend(ExecutionBackend):
         from reconforge.execution.executor import ToolExecutor
         from reconforge.core.analyzer import Analyzer
         from reconforge.core.vulnerability_intel import VulnerabilityIntel
+        from reconforge.core.services import ServiceClassifier, ServiceCapabilityRouter
 
         self.console = Console()
         self.registry = ToolRegistry()
         self.executor = ToolExecutor()
         self.analyzer = Analyzer()
         self.vulnerability_intel = VulnerabilityIntel()
+        self.service_classifier = ServiceClassifier()
+        self.capability_router = ServiceCapabilityRouter(self.service_classifier)
         self.dns_adapter = DNSAdapter()
         self.http_collector = HttpCollectorAdapter()
         self.whatweb_adapter = WhatWebAdapter()
@@ -287,10 +290,11 @@ class RealExecutionBackend(ExecutionBackend):
                         f"{product} {version} -> {route}".rstrip()
                     )
                 else:
+                    route = self.capability_router.get_route_description(port, host)
                     detail = " ".join(x for x in (product, version) if x)
                     detail = f" ({detail})" if detail else ""
                     self.console.print(
-                        f"  {port.number}/{port.protocol} {service}{detail} -> inventory only"
+                        f"  {port.number}/{port.protocol} {service:<10}{detail} -> {route}".rstrip()
                     )
 
     @staticmethod
@@ -325,32 +329,20 @@ class RealExecutionBackend(ExecutionBackend):
 
     @staticmethod
     def _discover_web_targets(analyzed_target, discovery_profile="COMMON", mode="Standard Recon"):
+        from reconforge.core.services import ServiceClassifier
         targets = []
+        classifier = ServiceClassifier()
 
         for host in analyzed_target.hosts.values():
             for port in host.ports:
                 if port.state != "open":
                     continue
 
-                service_name = (port.service.name if port.service else "").lower()
-                product = (port.service.product if port.service else "").lower()
-                is_web = (
-                    "http" in service_name
-                    or "http" in product
-                    or "www" in service_name
-                    or port.number in {80, 443, 8000, 8008, 8080, 8081, 8088, 8888, 8443, 9443}
-                )
-                if not is_web:
+                classification = classifier.classify(port, host)
+                if not classification.is_web:
                     continue
 
-                https = (
-                    port.number in {443, 8443, 9443}
-                    or "https" in service_name
-                    or "ssl" in service_name
-                    or "https" in product
-                    or "ssl" in product
-                )
-                scheme = "https" if https else "http"
+                scheme = "https" if classification.is_tls else "http"
                 url = f"{scheme}://{host.ip}:{port.number}"
                 targets.append(
                     ReconTarget(

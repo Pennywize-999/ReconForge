@@ -1,0 +1,83 @@
+.TH SENTINELRECON 1 "August 2026" "SentinelRecon v1.1.0" "User Commands"
+.SH NAME
+sentinelrecon \- Adaptive reconnaissance and vulnerability correlation engine
+.SH SYNOPSIS
+.B sentinelrecon
+[\fITARGET\fR] [\fIOPTIONS\fR]
+.br
+.B sentinelrecon
+\fICOMMAND\fR [\fIARGS\fR]
+.SH DESCRIPTION
+SentinelRecon is an adaptive reconnaissance and evidence correlation framework designed for authorized penetration testing, security audits, and laboratory assessments. It integrates network discovery, service capability classification (AJP, Web, SSH, SMB, DNS, Databases), web technology fingerprinting, content discovery, and evidence-based vulnerability intelligence into a unified pipeline.
+
+.SH INTERACTIVE MODE
+Running \fBsentinelrecon\fR without arguments launches the interactive mode, prompting for Target (IP or URL), Recon Mode (STANDARD or LOW-IMPACT), and Content Discovery Profile (COMMON, MEDIUM, or DEEP).
+
+.SH TARGET USAGE
+.B sentinelrecon <IP>
+.br
+.B sentinelrecon -u http://<TARGET>:<PORT>
+.br
+.B sentinelrecon -u https://<TARGET>:<PORT>
+.br
+.B sentinelrecon --url https://example.com
+
+.SH GLOBAL OPTIONS
+.TP
+.B --mode standard
+STANDARD reconnaissance mode. Performs full discovery including service detection, default scripts, and technology fingerprinting.
+.TP
+.B --mode low-impact
+LOW-IMPACT reconnaissance mode. Reduces request rates, respects Retry-After headers, and avoids duplicate requests.
+.TP
+.B --version
+Displays the installed SentinelRecon version (v1.1.0).
+.TP
+.B -h, --help
+Displays command-line help and usage information.
+
+.SH OFFLINE ANALYSIS
+.B sentinelrecon import <dir>
+.br
+Imports a directory of scan outputs and stores them in a session.
+.br
+.B sentinelrecon analyze <file>
+.br
+Analyzes a single scan output file and normalizes findings.
+
+.SH SESSIONS AND REPORTS
+.B sentinelrecon sessions
+.br
+Lists stored scan sessions.
+.br
+.B sentinelrecon show <session_id>
+.br
+Displays terminal summary for a specific session (use \fBcurrent\fR for the latest session).
+.br
+.B sentinelrecon report <session_id> [--format terminal|json|html] [--output <file>]
+.br
+Generates a report for a session in terminal, JSON, or HTML format.
+.br
+.B sentinelrecon waf <session_id>
+.br
+Displays WAF and CDN analysis for a session.
+
+.SH CAPABILITY & PROVIDER STATUS
+.B sentinelrecon tools
+.br
+Displays application capabilities and their underlying external provider status.
+
+.SH EXAMPLES
+.nf
+sentinelrecon
+sentinelrecon 10.49.128.206
+sentinelrecon 10.10.10.25 --mode low-impact
+sentinelrecon -u http://10.49.128.206:8080
+sentinelrecon sessions
+sentinelrecon show current
+sentinelrecon report current --format html
+sentinelrecon tools
+.fi
+
+.SH EXIT STATUS
+0 on success, 1 on error.

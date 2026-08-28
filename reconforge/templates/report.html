@@ -134,14 +134,15 @@
         </table>
         {% endif %}
 
+        <h4>Vulnerability Assessment</h4>
         {% if host.vulnerabilities %}
-        <h4>Vulnerability Intelligence</h4>
         <table>
             <tr>
                 <th>CVE ID</th>
                 <th>Severity</th>
                 <th>CVSS</th>
                 <th>Product</th>
+                <th>Version</th>
                 <th>Confidence</th>
             </tr>
             {% for vuln in host.vulnerabilities %}
@@ -149,11 +150,14 @@
                 <td><strong>{{ vuln.cve_id or 'VULN' }}</strong></td>
                 <td><span class="severity-{{ vuln.severity }}">{{ vuln.severity }}</span></td>
                 <td>{{ vuln.cvss or 'N/A' }}</td>
-                <td>{{ vuln.affected_product }} {{ vuln.detected_version or '' }}</td>
+                <td>{{ vuln.affected_product }}</td>
+                <td>{{ vuln.detected_version or 'unknown' }}</td>
                 <td class="confidence">{{ vuln.confidence.value }}</td>
             </tr>
             {% endfor %}
         </table>
+        {% else %}
+        <p style="color: #666; font-style: italic;">Status: No matching vulnerabilities found</p>
         {% endif %}
     </div>
     {% endfor %}

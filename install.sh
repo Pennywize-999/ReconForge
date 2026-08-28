@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ReconForge one-command installer for Kali Linux / Debian systems.
+# SentinelRecon one-command installer for Kali Linux / Debian systems.
 # Usage: sudo ./install.sh
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -11,15 +11,16 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_DIR="/opt/reconforge"
+INSTALL_DIR="/opt/sentinelrecon"
 VENV_DIR="${INSTALL_DIR}/venv"
-BIN_PATH="/usr/local/bin/reconforge"
+BIN_PATH="/usr/local/bin/sentinelrecon"
+COMPAT_BIN_PATH="/usr/local/bin/reconforge"
 
 export DEBIAN_FRONTEND=noninteractive
 
 echo
 printf '%s\n' '=============================================================='
-printf '%s\n' '            RECONFORGE 1.0.0 PRODUCTION INSTALLER             '
+printf '%s\n' '           SENTINELRECON 1.1.0 PRODUCTION INSTALLER           '
 printf '%s\n' '=============================================================='
 echo
 
@@ -54,7 +55,7 @@ echo "[OK] System dependencies ready."
 echo
 
 # 3. Create isolated installation directory & environment
-echo "[+] Setting up ReconForge environment in ${INSTALL_DIR}..."
+echo "[+] Setting up SentinelRecon environment in ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}"
 rm -rf "${INSTALL_DIR}/app"
 mkdir -p "${INSTALL_DIR}/app"
@@ -65,16 +66,17 @@ python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/python" -m pip install --upgrade pip -q >/dev/null 2>&1 || true
 "${VENV_DIR}/bin/python" -m pip install -q "${APP_DIR}"
 
-# 4. Create global executable symlink
-echo "[+] Configuring global reconforge command..."
-ln -sf "${VENV_DIR}/bin/reconforge" "${BIN_PATH}"
-chmod 755 "${BIN_PATH}"
+# 4. Create global executable symlinks
+echo "[+] Configuring global sentinelrecon and reconforge commands..."
+ln -sf "${VENV_DIR}/bin/sentinelrecon" "${BIN_PATH}"
+ln -sf "${VENV_DIR}/bin/sentinelrecon" "${COMPAT_BIN_PATH}"
+chmod 755 "${BIN_PATH}" "${COMPAT_BIN_PATH}"
 chown -R root:root "${INSTALL_DIR}"
 
 # 5. Verification
 echo "[+] Verifying installation..."
 if ! "${BIN_PATH}" --version >/dev/null 2>&1; then
-    echo "[!] ReconForge command verification failed."
+    echo "[!] SentinelRecon command verification failed."
     exit 1
 fi
 
@@ -82,35 +84,36 @@ echo
 printf '%s\n' '--------------------------------------------------------------'
 printf '%s\n' 'Component & External Tool Status'
 printf '%s\n' '--------------------------------------------------------------'
-printf '  %-18s %-20s %s\n' "ReconForge Module" "Underlying Backend" "Status"
+printf '  %-28s %-20s %s\n' "Application Capability" "Underlying Provider" "Status"
 printf '%s\n' '  ------------------------------------------------------------'
-printf '  %-18s %-20s [OK] Built-in\n' "ForgeProbe" "HTTP/HTTPS Probe"
-printf '  %-18s %-20s [OK] Built-in\n' "ForgeCore" "Normalization Engine"
-printf '  %-18s %-20s [OK] Built-in\n' "ForgeIntel" "NVD Vulnerability Intel"
+printf '  %-28s %-20s [OK] Built-in\n' "HTTP Response Analysis" "HTTP Collector"
+printf '  %-28s %-20s [OK] Built-in\n' "Normalization & Correlation" "SentinelCore"
+printf '  %-28s %-20s [OK] Built-in\n' "Vulnerability Assessment" "Local Advisories/NVD"
 
 EXTERNAL_MODULES=(
-    "ForgeScan|Nmap|nmap"
-    "ForgeDNS|DNS Utilities|host"
-    "ForgeTech|WhatWeb|whatweb"
-    "ForgeDiscover|Gobuster|gobuster"
-    "ForgeDiscover-Dir|DIRB|dirb"
-    "ForgeTLS|OpenSSL|openssl"
+    "Network Service Discovery|Nmap|nmap"
+    "DNS Intelligence|DNS Utilities|host"
+    "Technology Fingerprinting|WhatWeb|whatweb"
+    "Web Content Discovery|Gobuster|gobuster"
+    "Web Content Discovery (Alt)|DIRB|dirb"
+    "TLS / Certificate Analysis|OpenSSL|openssl"
 )
 
 for entry in "${EXTERNAL_MODULES[@]}"; do
     IFS="|" read -r module tool binary <<< "${entry}"
     if command -v "${binary}" >/dev/null 2>&1; then
-        printf '  %-18s %-20s [OK] Ready\n' "${module}" "${tool}"
+        printf '  %-28s %-20s [OK] Ready\n' "${module}" "${tool}"
     else
-        printf '  %-18s %-20s [WARN] Missing\n' "${module}" "${tool}"
+        printf '  %-28s %-20s [WARN] Missing\n' "${module}" "${tool}"
     fi
 done
 printf '%s\n' '--------------------------------------------------------------'
 echo
-echo '[+] ReconForge 1.0.0 installed successfully.'
+echo '[+] SentinelRecon 1.1.0 installed successfully.'
 echo
-echo '    Run ReconForge anytime with:'
-echo '        reconforge'
+echo '    Run SentinelRecon anytime with:'
+echo '        sentinelrecon'
+echo '        (or legacy alias: reconforge)'
 echo
 echo '    Installation path:'
 echo "        ${INSTALL_DIR}"

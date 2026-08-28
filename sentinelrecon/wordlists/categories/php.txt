@@ -1,0 +1,13 @@
+!phpinfo.php
+info.php
+php.php
+test.php
+index.php
+config.php
+configuration.php
+login.php
+admin.php
+install.php
+setup.php
+composer.json
+composer.lock

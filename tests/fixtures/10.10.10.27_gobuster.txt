@@ -1,0 +1,16 @@
+Starting gobuster
+[+] Url: http://10.10.10.27
+/admin (Status: 403)
+/login (Status: 403)
+/api (Status: 429)
+/dashboard (Status: 429)
+/secret (Status: 403)
+/hidden (Status: 403)
+/flag (Status: 403)
+/test (Status: 403)
+/config (Status: 403)
+/var (Status: 403)
+/tmp (Status: 403)
+/etc (Status: 403)
+/bin (Status: 403)
+/usr (Status: 403)

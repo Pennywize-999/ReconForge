@@ -1,85 +1,11 @@
-.TH RECONFORGE 1 "August 2026" "ReconForge v1.0.0" "User Commands"
+.TH RECONFORGE 1 "August 2026" "ReconForge (SentinelRecon v1.1.0)" "User Commands"
 .SH NAME
-reconforge \- First-level reconnaissance and security-assessment engine
+reconforge \- Compatibility alias for SentinelRecon adaptive reconnaissance engine
 .SH SYNOPSIS
 .B reconforge
 [\fITARGET\fR] [\fIOPTIONS\fR]
-.br
-.B reconforge
-\fICOMMAND\fR [\fIARGS\fR]
 .SH DESCRIPTION
-ReconForge is a first-level reconnaissance and security-assessment framework designed for authorized penetration testing, security assessments, and lab environments. It combines network discovery, DNS intelligence, service-aware enumeration, web technology detection, content discovery, vulnerability intelligence, correlation, and clean reporting into one guided workflow.
-
-.SH INTERACTIVE MODE
-Running \fBreconforge\fR without arguments launches the interactive mode, prompting for Target (IP or URL), Recon Mode (STANDARD or LOW-IMPACT), and Content Discovery Profile (COMMON, EXTENDED, or DEEP).
-
-.SH TARGET USAGE
-.B reconforge <IP>
-.br
-.B reconforge -u http://<TARGET>:<PORT>
-.br
-.B reconforge -u https://<TARGET>:<PORT>
-.br
-.B reconforge --url https://example.com
-
-.SH GLOBAL OPTIONS
-.TP
-.B --mode standard
-STANDARD reconnaissance mode. Performs full first-level discovery including all TCP ports, service detection, default scripts, and OS identification.
-.TP
-.B --mode low-impact
-LOW-IMPACT reconnaissance mode. Reduces scan intensity, avoids aggressive secondary passes, and observes rate limiting.
-.TP
-.B --version
-Displays the installed ReconForge version (v1.0.0).
-.TP
-.B -h, --help
-Displays command-line help and usage information.
-
-.SH OFFLINE ANALYSIS
-.B reconforge import <dir>
-.br
-Imports a directory of scan outputs and stores them in a session.
-.br
-.B reconforge analyze <file>
-.br
-Analyzes a single scan output file and normalizes findings.
-
-.SH SESSIONS AND REPORTS
-.B reconforge sessions
-.br
-Lists stored scan sessions.
-.br
-.B reconforge show <session_id>
-.br
-Displays terminal summary for a specific session (use \fBcurrent\fR for the latest session).
-.br
-.B reconforge report <session_id> [--format terminal|json|html] [--output <file>]
-.br
-Generates a report for a session.
-.br
-.B reconforge waf <session_id>
-.br
-Displays WAF and CDN analysis for a session.
-
-.SH TOOL AVAILABILITY
-.B reconforge tools
-.br
-Checks the availability of registered tool adapters and external binaries on the system.
-
-.SH EXAMPLES
-.nf
-reconforge
-reconforge 10.10.10.25
-reconforge 10.10.10.25 --mode low-impact
-reconforge -u http://10.10.10.25:80
-reconforge sessions
-reconforge show current
-reconforge report current --format html
-reconforge waf current
-reconforge tools
-.fi
-
-.SH EXIT STATUS
-0 on success, 1 on error.
-
+\fBreconforge\fR is a backward-compatibility symlink and command alias for \fBsentinelrecon\fR.
+Please refer to the \fBsentinelrecon\fR(1) manual page for full documentation.
+.SH SEE ALSO
+.BR sentinelrecon (1)

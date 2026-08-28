@@ -1,81 +1,56 @@
-# ReconForge Architecture
+# SentinelRecon Architecture
 
-ReconForge v1.0.0 utilizes a modular, pipeline-driven architecture that coordinates network discovery, service identification, web probing, technology fingerprinting, content discovery, normalization, and vulnerability intelligence.
+SentinelRecon v1.1.0 utilizes a modular, pipeline-driven architecture that coordinates network discovery, service capability classification, web probing, technology fingerprinting, content discovery, normalization, and evidence-based vulnerability intelligence.
 
 ```text
 Target (IP or URL)
        |
        v
-   [ForgeDNS]          <-- DNS & Reverse-DNS Resolution
+ [1/5] Discovery                <-- DNS & Network Service Discovery (Nmap / Host)
        |
        v
-   [ForgeScan]         <-- Complete Port & Service Discovery (Nmap)
+ [2/5] Service Analysis         <-- Capability Classification (AJP, Web, SSH, SMB, DNS, DBs)
+       |                            & Adaptive Routing (skips non-HTTP protocols safely)
        |
-  (Service-Aware Routing)
-       |
-       +---> [ForgeProbe]     <-- HTTP Status, Headers & Response Body
-       +---> [ForgeTech]      <-- Application & Framework Fingerprinting (WhatWeb)
-       +---> [ForgeDiscover]  <-- Category-Driven Content Discovery (Gobuster / Dirb)
-       +---> [ForgeTLS]       <-- HTTPS / SSL Certificate Intelligence
-       |
-       v
-   [ForgeCore]         <-- Data Normalization, Deduplication & Model Fusion
+       +---> [HTTP Collector]    <-- HTTP Status, Headers & Response Body
+       +---> [WhatWeb]           <-- Application & Framework Fingerprinting
+       +---> [Gobuster / Dirb]   <-- Category-Driven Content Discovery
+       +---> [TLS Collector]     <-- HTTPS / SSL Certificate Intelligence
        |
        v
-   [ForgeIntel]        <-- NVD 2.0 Exact CPE & Version Applicability Matching
+ [3/5] Adaptive Enumeration     <-- Specialized multi-protocol enumeration
        |
        v
- [Terminal / JSON / HTML Report] + [Collision-Safe Session Storage]
+ [4/5] Vulnerability Assessment <-- Authoritative Advisories (Local, NVD 2.0, CISA KEV)
+       |                            & Evidence-Based Cross-Service Correlation
+       v
+ [5/5] Correlation & Reporting  <-- Normalization, Deduplication, & Multi-Format Reports
 ```
 
 ## Component Breakdown
 
-### 1. ForgeDNS (DNS Intelligence)
-- Handles forward name resolution and reverse PTR lookups.
-- Normalizes IP-to-hostname mappings.
-- Cleanly categorizes normal absence ("no DNS record") vs true resolver errors.
+### 1. Discovery Subsystem
+- Handles DNS forward/reverse resolution and network service discovery.
+- In `STANDARD` mode, performs thorough service detection, scripts, and OS identification.
+- In `LOW-IMPACT` mode, throttles probe rates to respect network and service constraints.
 
-### 2. ForgeScan (Network & Service Discovery)
-- Driven by Nmap with explicit configuration per mode.
-- In `STANDARD` mode, scans all 65,535 TCP ports (`-sS -p- -sC -sV -O -A`).
-- Preserves exact service name, product, version, protocol, port, and state.
-- Discovers OS hints and raw CPE strings.
+### 2. Service Capability Classifier & Router (`sentinelrecon.services`)
+- Classifies services into capabilities: `HTTP`, `HTTPS`, `AJP`, `SSH`, `SMB`, `DNS`, `FTP`, `SMTP`, `SNMP`, `LDAP`, `MYSQL`, `POSTGRESQL`, `REDIS`, `MONGODB`.
+- Prevents calling HTTP directory enumeration tools against non-HTTP services like AJP (e.g. port 8009).
+- Accurately reports skipped protocols with clear, technical explanations.
 
-### 3. Service-Aware Routing
-- Evaluates discovered open ports from ForgeScan.
-- Automatically routes web services (e.g. 80, 443, 8080, 8443, and detected HTTP/HTTPS services) into web intelligence pipelines.
-- Prevents sending web enumeration requests to non-web services.
-
-### 4. ForgeProbe (HTTP Service Probing)
-- Built-in deterministic HTTP/HTTPS client.
-- Collects response codes, headers, redirect chains, server banners, and cookies.
-- Captures bounded response bodies for application fingerprinting.
-
-### 5. ForgeTech (Technology Fingerprinting)
-- Combines WhatWeb with deep body analysis.
-- Identifies CMSs, web frameworks, and application markers (e.g., qdPM, WordPress, jQuery, meta generator tags).
-- Employs bounded execution timeouts to prevent scans from stalling.
-
-### 6. ForgeDiscover & ForgeDiscover-Dir (Content Discovery)
-- Orchestrates high-speed directory and endpoint discovery (Gobuster / DIRB).
+### 3. Web Intelligence & Content Discovery
+- Combines native response collectors with WhatWeb and wordlist discovery.
 - Category-aware wordlists: admin, authentication, api, backup, configuration, general, and application-specific paths.
-- Profiles: `COMMON` (baseline), `EXTENDED` (broad), and `DEEP` (exhaustive).
+- Profiles: `COMMON` (baseline), `MEDIUM` (broad), and `DEEP` (exhaustive).
 
-### 7. ForgeTLS (TLS / HTTPS Inspection)
-- Built-in TLS handshake inspection.
-- Analyzes SSL/TLS certificate chains, SAN hostnames, issuer authorities, and validity.
+### 4. Vulnerability Intelligence Subsystem (`sentinelrecon.vulnerability`)
+- **Authoritative Datasets**: Structured local dataset for Apache Tomcat, OpenSSH, Apache HTTP Server, etc.
+- **Evidence-Based Correlation**: Links multiple service observations on the same host (e.g. Tomcat 9.0.30 on 8080 + AJP connector active on 8009 -> Ghostcat `CVE-2020-1938`).
+- **Clear Confidence & Status**: Distinguishes `POTENTIALLY_VULNERABLE` from `CONFIRMED_VULNERABLE` and includes detailed reasoning and evidence citations.
+- **Provider Architecture**: Extensible `LocalAdvisoryProvider`, `NVDProvider`, and `KEVProvider`.
 
-### 8. ForgeCore (Normalization & Correlation Engine)
-- Merges multi-source evidence into a single target data graph (`Target`, `Host`, `Port`, `WebEndpoint`, `Finding`).
-- Deduplicates URLs, normalizes trailing slashes, and resolves conflicting host identities.
-- Preserves unclassified intelligence (session cookies, unusual tokens) with distinct confidence ratings.
-
-### 9. ForgeIntel (Vulnerability Intelligence)
-- Verifies detected product and version against the National Vulnerability Database (NVD 2.0 API).
-- Enforces exact version applicability logic to prevent false positives.
-- Prioritizes accuracy over quantity: reports verified CVE matches only when evidence is conclusive.
-
-### 10. Session & Reporting Subsystem
-- Persists all raw outputs, execution plans, models, and generated reports into unique session directories (`~/.reconforge/sessions/session_<timestamp>`).
-- Dynamic reporting in Terminal, JSON, and standalone HTML formats.
-
+### 5. Normalization, Sessions & Multi-Format Reporting
+- Merges multi-source evidence into a single target data graph (`Target`, `Host`, `Port`, `WebEndpoint`, `Finding`, `Vulnerability`).
+- Generates rich Terminal, JSON, and standalone interactive HTML reports.
+- Persists all raw outputs, execution plans, models, and generated reports into unique session directories (`~/.sentinelrecon/sessions/session_<timestamp>`).
